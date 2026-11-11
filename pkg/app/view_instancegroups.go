@@ -142,7 +142,7 @@ func (a *app) showInstanceGroupVMs() {
 	}
 	renderSummary(a.summary)
 	a.statusInfo(fmt.Sprintf("Fetching VMs for instance group %s...", group))
-	go a.fetchInstanceGroupVMs(location, group)
+	a.goBackground(func() { a.fetchInstanceGroupVMs(location, group) })
 }
 
 func (a *app) fetchInstanceGroupVMs(location, group string) {

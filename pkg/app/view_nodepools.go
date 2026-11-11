@@ -78,7 +78,7 @@ var nodePoolsView = viewDef{
 			return
 		}
 		a.statusInfo(fmt.Sprintf("Fetching nodes for %s...", appState.Cluster))
-		go func() {
+		a.goBackground(func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
 			nodes, err := listClusterNodes(projectID, cl.Location, clusterName)
@@ -96,7 +96,7 @@ var nodePoolsView = viewDef{
 				a.setView(viewNodePools)
 				a.statusText(fmt.Sprintf("[green]Fetched %d nodes[-]", len(nodes)))
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return nodePoolResource(a, appState.ClusterProject, appState.Cluster, row[0])
@@ -189,7 +189,7 @@ func (a *app) showNodePoolVMs() {
 	a.setView(viewVMs)
 	if len(a.allRows) == 0 {
 		a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
-		go a.fetchNodePoolVMs(pool)
+		a.goBackground(func() { a.fetchNodePoolVMs(pool) })
 		return
 	}
 	a.applyNodePoolVMFilter(pool)

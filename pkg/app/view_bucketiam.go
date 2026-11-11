@@ -50,7 +50,7 @@ var bucketIAMView = viewDef{
 			return
 		}
 		a.statusInfo(fmt.Sprintf("Fetching IAM policy for %s...", appState.Bucket))
-		go func() {
+		a.goBackground(func() {
 			projectID := appState.BucketProject
 			bucket := appState.Bucket
 			bindings, err := listBucketIAMPolicy(projectID, bucket)
@@ -68,7 +68,7 @@ var bucketIAMView = viewDef{
 				a.setView(viewBucketIAM)
 				a.statusText(fmt.Sprintf("[green]Fetched %d IAM bindings[-]", len(bindings)))
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return bucketIAMResource(a, appState.BucketProject, appState.Bucket, row[0], row[2])

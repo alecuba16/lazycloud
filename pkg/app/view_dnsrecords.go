@@ -48,7 +48,7 @@ var dnsRecordsView = viewDef{
 			return
 		}
 		a.statusInfo(fmt.Sprintf("Fetching dns records for %s...", appState.Zone))
-		go func() {
+		a.goBackground(func() {
 			projectID := appState.ZoneProject
 			zone := appState.Zone
 			records, err := listZoneDNSRecords(projectID, zone)
@@ -66,7 +66,7 @@ var dnsRecordsView = viewDef{
 				a.setView(viewDNSRecords)
 				a.statusText(fmt.Sprintf("[green]Fetched %d dns records[-]", len(records)))
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return dnsRecordResource(a, appState.ZoneProject, appState.Zone, row[0], row[1])

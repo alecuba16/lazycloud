@@ -142,7 +142,7 @@ var networksAllView = viewDef{
 	},
 	refresh: func(a *app) {
 		a.statusInfo("Fetching networks for all projects...")
-		go func() {
+		a.goBackground(func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
 				a.reportError("networks", "all", "Failed to list projects", err)
@@ -192,7 +192,7 @@ var networksAllView = viewDef{
 				}
 				a.statusText(status)
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return networkResource(a, row[8], row[0], row[2], row[1])

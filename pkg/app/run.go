@@ -147,7 +147,9 @@ func bootApp() (*app, func(), error) {
 // records the screen so panel sizing can read terminal dimensions.
 func (a *app) runUI() error {
 	a.tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		a.uiMu.Lock()
 		a.screen = screen
+		a.uiMu.Unlock()
 		return false
 	})
 	a.uiRunning.Store(true)

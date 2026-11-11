@@ -118,7 +118,7 @@ func (a *app) ensureSearchIndex(force bool) {
 	}
 	idx.building = true
 	idx.mu.Unlock()
-	go a.buildSearchIndex()
+	a.goBackground(a.buildSearchIndex)
 }
 
 // buildSearchIndex builds every dirty kind one at a time. After each kind it
@@ -161,7 +161,7 @@ func (a *app) buildSearchIndex() {
 			idx.warm[kind] = true
 			if len(entries) == 0 && !idx.pulled[kind] {
 				idx.pulled[kind] = true
-				go a.pullSearchKind(kind)
+				a.goBackground(func() { a.pullSearchKind(kind) })
 			}
 		}
 		idx.mu.Unlock()
@@ -211,7 +211,7 @@ func (a *app) ensureSearchProjects() {
 	}
 	idx.projectsPulled = true
 	idx.mu.Unlock()
-	go func() {
+	a.goBackground(func() {
 		projects, err := listGcloudProjects()
 		if err != nil {
 			a.reportError("projects", "all", "Search failed to fetch projects", err)
@@ -222,7 +222,7 @@ func (a *app) ensureSearchProjects() {
 			return
 		}
 		a.ensureSearchIndex(true)
-	}()
+	})
 }
 
 // loadSearchEntries reads one All view through its cache-only load. The last

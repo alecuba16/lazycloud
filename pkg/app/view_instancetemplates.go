@@ -199,7 +199,7 @@ func (a *app) showTemplateVMs() {
 	a.setView(viewVMs)
 	if len(a.allRows) == 0 {
 		a.statusInfo(fmt.Sprintf("Fetching VMs for %s...", appState.ProjectID))
-		go a.fetchTemplateVMs(template)
+		a.goBackground(func() { a.fetchTemplateVMs(template) })
 		return
 	}
 	a.applyTemplateVMFilter(template)

@@ -33,7 +33,7 @@ func TestRunUIAgainstSimulationScreen(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- a.runUI() }()
 
-	waitFor(t, func() bool { return a.screen != nil })
+	waitFor(t, a, func() bool { return a.screen != nil })
 	sim.InjectKey(tcell.KeyCtrlC, 0, tcell.ModNone)
 	select {
 	case err := <-done:
@@ -65,7 +65,7 @@ func TestProjectRefreshWrapperReportsFetchResults(t *testing.T) {
 
 	projectRefresh(viewBuckets, "buckets", fetchProjectBuckets)(a)
 
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Fetched 0 buckets")
 	})
 }
@@ -91,7 +91,7 @@ func TestProjectRefreshWrapperSurfacesFetchError(t *testing.T) {
 
 	projectRefresh(viewBuckets, "buckets", fetchProjectBuckets)(a)
 
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to fetch buckets")
 	})
 }
@@ -105,7 +105,7 @@ func TestRefreshProjectViewsSummaries(t *testing.T) {
 
 	a.refreshProjectViews()
 
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Updated 21 views for p1")
 	})
 }
@@ -130,7 +130,7 @@ func TestRefreshProjectViewsCountsFailures(t *testing.T) {
 
 	a.refreshProjectViews()
 
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "views failed")
 	})
 }
@@ -205,7 +205,7 @@ func TestEnsureSearchProjectsPullsAndSaves(t *testing.T) {
 	resetAppState()
 
 	a.ensureSearchProjects()
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		projects, err := a.cache.ListProjects()
 		return err == nil && len(projects) == 1
 	})
@@ -230,7 +230,7 @@ func TestEnsureSearchProjectsReportsPullFailure(t *testing.T) {
 	resetAppState()
 
 	a.ensureSearchProjects()
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Search failed to fetch projects")
 	})
 }
@@ -247,7 +247,7 @@ func TestEnsureSearchProjectsReportsSaveFailure(t *testing.T) {
 	a.cache.Close()
 
 	a.ensureSearchProjects()
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Search failed to update cache")
 	})
 }

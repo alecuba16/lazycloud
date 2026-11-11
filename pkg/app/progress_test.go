@@ -93,7 +93,7 @@ func TestAllProjectsRefreshReportsFailuresAndTotals(t *testing.T) {
 	action(a)
 
 	// The fetch runs in a goroutine; wait for the final status to appear.
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "failed")
 	})
 	if !strings.Contains(a.status.GetText(false), "VMs across 1 projects") {
@@ -119,7 +119,7 @@ func TestAllProjectsRefreshSumsCounts(t *testing.T) {
 	})
 	action(a)
 
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Fetched 4")
 	})
 	if calls != 2 {
@@ -142,7 +142,7 @@ func TestAllProjectsRefreshWithoutProjects(t *testing.T) {
 	})
 	action(a)
 
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Fetched 0 VMs across 0 projects")
 	})
 	if calls != 0 {
@@ -156,11 +156,17 @@ func (e errorString) Error() string { return string(e) }
 
 // waitFor polls until cond holds or a short deadline passes; background
 // fetches finish asynchronously in tests because queueUpdateDraw runs inline.
-func waitFor(t *testing.T, cond func() bool) {
+// Every poll runs under the ui mutex and the final success drains the
+// background WaitGroup, so widget reads never race a fetch goroutine.
+func waitFor(t *testing.T, a *app, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if cond() {
+		a.uiMu.Lock()
+		held := cond()
+		a.uiMu.Unlock()
+		if held {
+			a.bg.Wait()
 			return
 		}
 		time.Sleep(5 * time.Millisecond)

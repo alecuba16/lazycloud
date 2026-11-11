@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -18,6 +19,8 @@ import (
 
 type app struct {
 	tapp             *tview.Application
+	uiMu             sync.Mutex
+	bg               sync.WaitGroup
 	cmd              *tview.InputField
 	info             *tview.Table
 	summary          *tview.TextView

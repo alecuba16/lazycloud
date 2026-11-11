@@ -127,7 +127,7 @@ func TestRunUIQueuedUpdatePath(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() { done <- a.runUI() }()
-	waitFor(t, func() bool { return a.screen != nil })
+	waitFor(t, a, func() bool { return a.screen != nil })
 
 	// With the loop live, queueUpdateDraw must go through the queue.
 	ran := make(chan struct{})
@@ -192,7 +192,7 @@ func TestBuildSearchIndexPullsEmptyKind(t *testing.T) {
 	// The base fixture seeds VMs, so vms-all has entries; snapshots-all is
 	// empty: the builder must mark it pulled and start a background pull.
 	a.ensureSearchIndex(true)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		a.searchIndex.mu.Lock()
 		defer a.searchIndex.mu.Unlock()
 		return a.searchIndex.pulled[viewSnapshotsAll]
@@ -223,7 +223,7 @@ func TestPullSearchKindWithFailingFetch(t *testing.T) {
 	}
 
 	a.pullSearchKind(viewVMsAll)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.summary.GetText(false), "Search pull failed")
 	})
 }
@@ -275,7 +275,7 @@ func TestAllProjectsRefreshReportsListFailure(t *testing.T) {
 	a.cache.Close()
 
 	allProjectsRefresh(viewVMsAll, "vms", "vms", "vms", fetchProjectVMs)(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to list projects")
 	})
 }
@@ -285,7 +285,7 @@ func TestProjectRefreshTickerUpdatesStatus(t *testing.T) {
 	p := newProgress(2)
 	stop := a.startProgressTicker(p)
 	p.advance("step one")
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return a.status.GetText(false) != ""
 	})
 	stop()
@@ -300,7 +300,7 @@ func TestRefreshProjectsReportsFailure(t *testing.T) {
 	resetAppState()
 
 	views[viewProjects].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to fetch projects")
 	})
 }
@@ -317,7 +317,7 @@ func TestRefreshProjectsSucceeds(t *testing.T) {
 	// live loop; assert on the cache effect instead, the goroutine's
 	// durable step before that call.
 	views[viewProjects].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		projects, err := a.cache.ListProjects()
 		return err == nil && len(projects) == 1 && projects[0].ProjectID == "p2"
 	})
@@ -332,7 +332,7 @@ func TestBucketIAMRefreshReportsFailure(t *testing.T) {
 	appState.Bucket = "b1"
 
 	views[viewBucketIAM].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to fetch bucket IAM policy")
 	})
 }
@@ -346,7 +346,7 @@ func TestDNSRecordsRefreshReportsFailure(t *testing.T) {
 	appState.Zone = "z1"
 
 	views[viewDNSRecords].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to fetch dns records")
 	})
 }
@@ -362,7 +362,7 @@ func TestWorkloadsRefreshReportsFailure(t *testing.T) {
 	appState.Cluster = "cl-1"
 
 	views[viewWorkloads].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to fetch workloads")
 	})
 }
@@ -378,7 +378,7 @@ func TestNodePoolsRefreshReportsFailure(t *testing.T) {
 	appState.Cluster = "cl-1"
 
 	views[viewNodePools].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to fetch nodes")
 	})
 }
@@ -428,7 +428,7 @@ func TestNodePoolsRefreshSaveFailure(t *testing.T) {
 	appState.Cluster = "cl-1"
 
 	views[viewNodePools].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		return strings.Contains(a.status.GetText(false), "Failed to update cache")
 	})
 }
@@ -446,7 +446,7 @@ func TestNodePoolsRefreshSucceeds(t *testing.T) {
 	// The success tail queues through tapp directly; assert the nodes
 	// landed in the cache, the step before that call.
 	views[viewNodePools].refresh(a)
-	waitFor(t, func() bool {
+	waitFor(t, a, func() bool {
 		nodes, err := a.cache.ListClusterNodes("p1", "cl-1")
 		return err == nil && len(nodes) == 1
 	})
@@ -461,7 +461,7 @@ func TestFetchNodePoolVMsArms(t *testing.T) {
 		appState.ProjectID = "p1"
 
 		a.fetchNodePoolVMs("pool")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Failed to fetch VMs")
 		})
 	})
@@ -474,7 +474,7 @@ func TestFetchNodePoolVMsArms(t *testing.T) {
 		a.cache.Close()
 
 		a.fetchNodePoolVMs("pool")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Failed to update cache")
 		})
 	})
@@ -489,7 +489,7 @@ func TestFetchNodePoolVMsArms(t *testing.T) {
 		// The final redraw overwrites the status line, so assert on the
 		// summary, which holds the error.
 		a.fetchNodePoolVMs("pool")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to fetch disks")
 		})
 	})
@@ -503,7 +503,7 @@ func TestFetchNodePoolVMsArms(t *testing.T) {
 
 		a.cache.Close()
 		a.fetchNodePoolVMs("pool")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to update cache")
 		})
 	})
@@ -517,7 +517,7 @@ func TestFetchInstanceGroupVMsArms(t *testing.T) {
 		a.cache.Close()
 
 		a.fetchInstanceGroupVMs("europe-west1-b", "group")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Failed to load VMs")
 		})
 	})
@@ -533,7 +533,7 @@ func TestFetchInstanceGroupVMsArms(t *testing.T) {
 		appState.ProjectID = "p1"
 
 		a.fetchInstanceGroupVMs("europe-west1-b", "group")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to fetch VMs")
 		})
 	})
@@ -591,7 +591,7 @@ CREATE TABLE vms_readonly (
 		appState.ProjectID = "p1"
 
 		a.fetchInstanceGroupVMs("europe-west1-b", "group")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to update cache")
 		})
 	})
@@ -609,7 +609,7 @@ CREATE TABLE vms_readonly (
 		}
 
 		a.fetchInstanceGroupVMs("europe-west1-b", "group")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Failed to fetch instance group VMs")
 		})
 	})
@@ -624,7 +624,7 @@ func TestFetchTemplateVMsArms(t *testing.T) {
 		appState.ProjectID = "p1"
 
 		a.fetchTemplateVMs("tpl")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Failed to fetch VMs")
 		})
 	})
@@ -637,7 +637,7 @@ func TestFetchTemplateVMsArms(t *testing.T) {
 		a.cache.Close()
 
 		a.fetchTemplateVMs("tpl")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Failed to update cache")
 		})
 	})
@@ -651,7 +651,7 @@ func TestFetchTemplateVMsArms(t *testing.T) {
 		appState.ProjectID = "p1"
 
 		a.fetchTemplateVMs("tpl")
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "1 VMs for template tpl")
 		})
 	})
@@ -663,7 +663,7 @@ func TestNetworksAllRefreshArms(t *testing.T) {
 		a.cache.Close()
 
 		views[viewNetworksAll].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Failed to list projects")
 		})
 	})
@@ -677,7 +677,7 @@ func TestNetworksAllRefreshArms(t *testing.T) {
 		resetAppState()
 
 		views[viewNetworksAll].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to fetch networks for p1")
 		})
 	})
@@ -691,7 +691,7 @@ func TestNetworksAllRefreshArms(t *testing.T) {
 		resetAppState()
 
 		views[viewNetworksAll].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to fetch subnetworks for p1")
 		})
 	})
@@ -729,7 +729,7 @@ func TestNetworksAllRefreshArms(t *testing.T) {
 		resetAppState()
 
 		views[viewNetworksAll].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to update cache")
 		})
 	})
@@ -745,7 +745,7 @@ func TestNetworksAllRefreshArms(t *testing.T) {
 		resetAppState()
 
 		views[viewNetworksAll].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Fetched 1 networks and 1 subnetworks")
 		})
 	})
@@ -759,7 +759,7 @@ func TestPublicImagesRefreshArms(t *testing.T) {
 		resetAppState()
 
 		views[viewPublicImages].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to fetch public images")
 		})
 	})
@@ -794,7 +794,7 @@ func TestPublicImagesRefreshArms(t *testing.T) {
 		resetAppState()
 
 		views[viewPublicImages].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.summary.GetText(false), "Failed to update cache")
 		})
 	})
@@ -807,7 +807,7 @@ func TestPublicImagesRefreshArms(t *testing.T) {
 		resetAppState()
 
 		views[viewPublicImages].refresh(a)
-		waitFor(t, func() bool {
+		waitFor(t, a, func() bool {
 			return strings.Contains(a.status.GetText(false), "Fetched")
 		})
 	})

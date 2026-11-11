@@ -74,10 +74,26 @@ func (p *progress) finish() {
 // (tests, early startup), so before that f runs inline.
 func (a *app) queueUpdateDraw(f func()) {
 	if a.uiRunning.Load() {
-		a.tapp.QueueUpdateDraw(f)
+		a.tapp.QueueUpdateDraw(func() {
+			a.uiMu.Lock()
+			defer a.uiMu.Unlock()
+			f()
+		})
 		return
 	}
+	a.uiMu.Lock()
+	defer a.uiMu.Unlock()
 	f()
+}
+
+// goBackground tracks background fetch goroutines so tests can wait for the
+// app to go quiet before touching shared seams or state.
+func (a *app) goBackground(f func()) {
+	a.bg.Add(1)
+	go func() {
+		defer a.bg.Done()
+		f()
+	}()
 }
 
 // startProgressTicker refreshes the status line spinner while p runs. The
@@ -85,6 +101,9 @@ func (a *app) queueUpdateDraw(f func()) {
 // call it before queueing the final status so a late tick cannot overwrite it.
 func (a *app) startProgressTicker(p *progress) (stop func()) {
 	done := make(chan struct{})
+	// Deliberately untracked: the ticker can outlive a test's waitFor and
+	// only touches widgets through queueUpdateDraw, which the ui mutex
+	// serializes. Tracked fetch goroutines are the ones tests must drain.
 	go func() {
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
@@ -118,7 +137,7 @@ func (a *app) startProgressTicker(p *progress) (stop func()) {
 func allProjectsRefresh(kind viewKind, logView, stepLabel, totalLabel string, fetch func(a *app, projectID string) (int, string, error)) func(a *app) {
 	return func(a *app) {
 		a.statusInfo(fmt.Sprintf("Fetching %s for all projects...", stepLabel))
-		go func() {
+		a.goBackground(func() {
 			projects, err := a.cache.ListProjects()
 			if err != nil {
 				a.reportError(logView, "all", "Failed to list projects", err)
@@ -153,6 +172,6 @@ func allProjectsRefresh(kind viewKind, logView, stepLabel, totalLabel string, fe
 				}
 				a.statusText(status)
 			})
-		}()
+		})
 	}
 }

@@ -831,7 +831,7 @@ func (a *app) refreshProjectViews() {
 	for _, kind := range projectViewKinds {
 		a.markAutoFetched(autoFetchKey(kind, projectID))
 	}
-	go func() {
+	a.goBackground(func() {
 		p := newProgress(len(projectViewKinds))
 		stop := a.startProgressTicker(p)
 		defer stop()
@@ -860,7 +860,7 @@ func (a *app) refreshProjectViews() {
 			}
 			a.statusText(status)
 		})
-	}()
+	})
 }
 
 func (a *app) tableRowCells(row int) []string {

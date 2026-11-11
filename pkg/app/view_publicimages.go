@@ -21,7 +21,7 @@ var publicImagesView = viewDef{
 	},
 	refresh: func(a *app) {
 		a.statusInfo("Fetching public images...")
-		go func() {
+		a.goBackground(func() {
 			prog := newProgress(len(providers.PublicImageProjects))
 			stop := a.startProgressTicker(prog)
 			defer stop()
@@ -58,7 +58,7 @@ var publicImagesView = viewDef{
 				}
 				a.statusText(status)
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return imageResource(a, row[9], row[0])

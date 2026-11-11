@@ -110,7 +110,7 @@ func projectRefresh(kind viewKind, label string, fetch func(a *app, projectID st
 			return
 		}
 		a.statusInfo("Fetching " + label + "...")
-		go func() {
+		a.goBackground(func() {
 			projectID := appState.ProjectID
 			_, msg, err := fetch(a, projectID)
 			if err != nil {
@@ -122,7 +122,7 @@ func projectRefresh(kind viewKind, label string, fetch func(a *app, projectID st
 				a.setView(kind)
 				a.statusText("[green]" + msg + "[-]")
 			})
-		}()
+		})
 	}
 }
 

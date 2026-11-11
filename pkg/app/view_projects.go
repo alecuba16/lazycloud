@@ -30,7 +30,7 @@ var projectsView = viewDef{
 	},
 	refresh: func(a *app) {
 		a.statusInfo("Fetching projects...")
-		go func() {
+		a.goBackground(func() {
 			projects, err := listGcloudProjects()
 			if err != nil {
 				a.reportError("projects", "all", "Failed to fetch projects", err)
@@ -51,7 +51,7 @@ var projectsView = viewDef{
 				a.setView(viewProjects)
 				a.statusText(fmt.Sprintf("[green]Fetched %d projects[-]", len(saved)))
 			})
-		}()
+		})
 	},
 	selectRow: func(a *app, row, _ int) {
 		appState.ProjectID = a.info.GetCell(row, 0).Text

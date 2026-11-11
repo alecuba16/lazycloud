@@ -59,7 +59,7 @@ var workloadsView = viewDef{
 			return
 		}
 		a.statusInfo(fmt.Sprintf("Fetching workloads for %s...", appState.Cluster))
-		go func() {
+		a.goBackground(func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
 			workloads, err := listClusterWorkloads(projectID, cl.Location, clusterName)
@@ -77,7 +77,7 @@ var workloadsView = viewDef{
 				a.setView(viewWorkloads)
 				a.statusText(fmt.Sprintf("[green]Fetched %d workloads[-]", len(workloads)))
 			})
-		}()
+		})
 	},
 	resource: func(a *app, row []string) (any, error) {
 		return workloadResource(a, appState.ClusterProject, appState.Cluster, row[1], row[0], row[2])
