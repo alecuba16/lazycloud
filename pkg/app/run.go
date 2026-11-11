@@ -132,5 +132,6 @@ func Run() error {
 		return false
 	})
 
+	a.uiRunning.Store(true)
 	return tapp.Run()
 }

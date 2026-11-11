@@ -74,20 +74,20 @@ func networkResource(a *app, projectID, kind, region, name string) (any, error) 
 	}
 }
 
-func fetchProjectNetworks(a *app, projectID string) (string, error) {
+func fetchProjectNetworks(a *app, projectID string) (int, string, error) {
 	networks, err := providers.ListProjectNetworks(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	subnetworks, err := providers.ListProjectSubnetworks(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveNetworks(projectID, networks, subnetworks); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("networks", projectID, len(networks)+len(subnetworks))
-	return fmt.Sprintf("Fetched %d networks and %d subnetworks", len(networks), len(subnetworks)), nil
+	return len(networks), fmt.Sprintf("Fetched %d networks and %d subnetworks", len(networks), len(subnetworks)), nil
 }
 
 var networksView = viewDef{
@@ -148,11 +148,17 @@ var networksAllView = viewDef{
 				a.reportError("networks", "all", "Failed to list projects", err)
 				return
 			}
+			prog := newProgress(len(projects))
+			stop := a.startProgressTicker(prog)
+			defer stop()
 			totalNetworks, totalSubnets := 0, 0
 			failed := 0
 			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching networks for %s...", p.ProjectID))
+				prog.advance(fmt.Sprintf("Fetching networks for %s...", p.ProjectID))
+				a.queueUpdateDraw(func() {
+					if cur, ok := prog.current(); ok {
+						a.statusInfo(cur)
+					}
 				})
 				networks, err := providers.ListProjectNetworks(p.ProjectID)
 				if err != nil {
@@ -175,8 +181,9 @@ var networksAllView = viewDef{
 				totalNetworks += len(networks)
 				totalSubnets += len(subnetworks)
 			}
+			prog.finish()
 			a.markViewUpdated(viewNetworksAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewNetworksAll)
 				status := fmt.Sprintf("[green]Fetched %d networks and %d subnetworks across %d projects[-]",
 					totalNetworks, totalSubnets, len(projects))

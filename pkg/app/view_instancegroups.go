@@ -37,16 +37,16 @@ func instanceGroupResource(a *app, projectID, zone, name string) (any, error) {
 	return g, nil
 }
 
-func fetchProjectInstanceGroups(a *app, projectID string) (string, error) {
+func fetchProjectInstanceGroups(a *app, projectID string) (int, string, error) {
 	groups, err := providers.ListProjectInstanceGroups(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveInstanceGroups(projectID, groups); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("instance-groups", projectID, len(groups))
-	return fmt.Sprintf("Fetched %d instance groups", len(groups)), nil
+	return len(groups), fmt.Sprintf("Fetched %d instance groups", len(groups)), nil
 }
 
 var instanceGroupsView = viewDef{
@@ -86,45 +86,7 @@ var instanceGroupsAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d instance groups for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching instance groups for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("instance-groups", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching instance groups for %s...", p.ProjectID))
-				})
-				groups, err := providers.ListProjectInstanceGroups(p.ProjectID)
-				if err != nil {
-					a.reportError("instance-groups", p.ProjectID, "Failed to fetch instance groups for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveInstanceGroups(p.ProjectID, groups); err != nil {
-					a.reportError("instance-groups", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("instance-groups", p.ProjectID, len(groups))
-				total += len(groups)
-			}
-			a.markViewUpdated(viewInstanceGroupsAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewInstanceGroupsAll)
-				status := fmt.Sprintf("[green]Fetched %d instance groups across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewInstanceGroupsAll, "instance-groups", "instance groups", "instance groups", fetchProjectInstanceGroups),
 	resource: func(a *app, row []string) (any, error) {
 		return instanceGroupResource(a, row[8], row[1], row[0])
 	},

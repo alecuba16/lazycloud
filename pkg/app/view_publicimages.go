@@ -22,11 +22,17 @@ var publicImagesView = viewDef{
 	refresh: func(a *app) {
 		a.statusInfo("Fetching public images...")
 		go func() {
+			prog := newProgress(len(providers.PublicImageProjects))
+			stop := a.startProgressTicker(prog)
+			defer stop()
 			total := 0
 			failed := 0
 			for _, projectID := range providers.PublicImageProjects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching public images from %s...", projectID))
+				prog.advance(fmt.Sprintf("Fetching public images from %s...", projectID))
+				a.queueUpdateDraw(func() {
+					if cur, ok := prog.current(); ok {
+						a.statusInfo(cur)
+					}
 				})
 				images, err := providers.ListProjectImages(projectID)
 				if err != nil {
@@ -42,8 +48,9 @@ var publicImagesView = viewDef{
 				a.logger.Update("public-images", projectID, len(images))
 				total += len(images)
 			}
+			prog.finish()
 			a.markViewUpdated(viewPublicImages, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewPublicImages)
 				status := fmt.Sprintf("[green]Fetched %d public images across %d projects[-]", total, len(providers.PublicImageProjects))
 				if failed > 0 {

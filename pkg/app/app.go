@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -31,6 +32,7 @@ type app struct {
 	helpColumn       *tview.Flex
 	shortcutsSummary *tview.Table
 	screen           tcell.Screen
+	uiRunning        atomic.Bool
 
 	viewHeaders      []string
 	allRows          [][]string
@@ -112,7 +114,7 @@ func (a *app) statusInfo(text string) {
 
 func (a *app) reportError(view, projectID, message string, err error) {
 	a.logger.Error(view, projectID, message+": "+err.Error())
-	a.tapp.QueueUpdateDraw(func() {
+	a.queueUpdateDraw(func() {
 		a.summary.SetText("[red]" + message + ": [-]" + err.Error())
 		a.statusText("[red]" + message + "[-]")
 	})

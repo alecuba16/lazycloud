@@ -63,16 +63,16 @@ func instanceTemplateResource(a *app, projectID, location, name string) (any, er
 	return template, nil
 }
 
-func fetchProjectInstanceTemplates(a *app, projectID string) (string, error) {
+func fetchProjectInstanceTemplates(a *app, projectID string) (int, string, error) {
 	templates, err := providers.ListProjectInstanceTemplates(projectID)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 	if err := a.cache.SaveInstanceTemplates(projectID, templates); err != nil {
-		return "", err
+		return 0, "", err
 	}
 	a.logger.Update("instance-templates", projectID, len(templates))
-	return fmt.Sprintf("Fetched %d instance templates", len(templates)), nil
+	return len(templates), fmt.Sprintf("Fetched %d instance templates", len(templates)), nil
 }
 
 var instanceTemplatesView = viewDef{
@@ -112,45 +112,7 @@ var instanceTemplatesAllView = viewDef{
 	status: func(a *app, count int) string {
 		return fmt.Sprintf("%d instance templates for all projects", count)
 	},
-	refresh: func(a *app) {
-		a.statusInfo("Fetching instance templates for all projects...")
-		go func() {
-			projects, err := a.cache.ListProjects()
-			if err != nil {
-				a.reportError("instance-templates", "all", "Failed to list projects", err)
-				return
-			}
-			total := 0
-			failed := 0
-			for _, p := range projects {
-				a.tapp.QueueUpdateDraw(func() {
-					a.statusInfo(fmt.Sprintf("Fetching instance templates for %s...", p.ProjectID))
-				})
-				templates, err := providers.ListProjectInstanceTemplates(p.ProjectID)
-				if err != nil {
-					a.reportError("instance-templates", p.ProjectID, "Failed to fetch instance templates for "+p.ProjectID, err)
-					failed++
-					continue
-				}
-				if err := a.cache.SaveInstanceTemplates(p.ProjectID, templates); err != nil {
-					a.reportError("instance-templates", p.ProjectID, "Failed to update cache", err)
-					failed++
-					continue
-				}
-				a.logger.Update("instance-templates", p.ProjectID, len(templates))
-				total += len(templates)
-			}
-			a.markViewUpdated(viewInstanceTemplatesAll, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
-				a.setView(viewInstanceTemplatesAll)
-				status := fmt.Sprintf("[green]Fetched %d instance templates across %d projects[-]", total, len(projects))
-				if failed > 0 {
-					status += fmt.Sprintf(" [red](%d projects failed, see log)[-]", failed)
-				}
-				a.statusText(status)
-			})
-		}()
-	},
+	refresh: allProjectsRefresh(viewInstanceTemplatesAll, "instance-templates", "instance templates", "instance templates", fetchProjectInstanceTemplates),
 	resource: func(a *app, row []string) (any, error) {
 		return instanceTemplateResource(a, row[10], row[1], row[0])
 	},

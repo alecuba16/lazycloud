@@ -803,20 +803,27 @@ func (a *app) refreshProjectViews() {
 		a.markAutoFetched(autoFetchKey(kind, projectID))
 	}
 	go func() {
+		p := newProgress(len(projectViewKinds))
+		stop := a.startProgressTicker(p)
+		defer stop()
 		failed := 0
-		for i, kind := range projectViewKinds {
+		for _, kind := range projectViewKinds {
 			def := views[kind]
-			a.tapp.QueueUpdateDraw(func() {
-				a.statusInfo(fmt.Sprintf("Fetching %s (%d/%d)...", def.title, i+1, len(projectViewKinds)))
+			p.advance("Fetching " + def.title)
+			a.queueUpdateDraw(func() {
+				if cur, ok := p.current(); ok {
+					a.statusInfo(cur)
+				}
 			})
-			if _, err := def.fetch(a, projectID); err != nil {
+			if _, _, err := def.fetch(a, projectID); err != nil {
 				a.reportError(string(kind), projectID, "Failed to fetch "+def.title, err)
 				failed++
 			} else {
 				a.markViewUpdated(kind, projectID)
 			}
 		}
-		a.tapp.QueueUpdateDraw(func() {
+		p.finish()
+		a.queueUpdateDraw(func() {
 			a.setView(appState.ViewKind)
 			status := fmt.Sprintf("[green]Updated %d views for %s[-]", len(projectViewKinds)-failed, projectID)
 			if failed > 0 {
