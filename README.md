@@ -81,6 +81,7 @@ Press `?` inside the TUI for the always up-to-date help overlay.
 | `q` / `Ctrl-C` | Quit |
 | `:` | Command mode (e.g. `:vms`, `:sort asc name`, or type an IP address to jump to it) |
 | `/` | Filter the current list (see [Filtering](#filtering)) |
+| `s` / `Ctrl-P` / `:search` | Search every view of every project (see [Search](#search)) |
 | `u` | Refresh view (re-fetch from the GCP API and update the cache) |
 | `U` | Refresh every view of the current project, one after another (the status bar shows the view being fetched) |
 | `y` | Copy focused row (JSON) to clipboard |
@@ -152,6 +153,22 @@ Anything with arguments or not matching a view name is treated as a command; unk
 | `s` | SSH to VM via IAP | VM views |
 | `r` | Restore last deleted project | projects view |
 | `x` | Delete project from cache | projects view |
+
+## Search
+
+Press `s` (not in the VMs view), `Ctrl-P`, or run `:search` to search every indexed view across every project. `/` stays the per-view filter.
+
+The index is built over the local cache in the background, most-used views first (VMs, IPs, VPCs, buckets, ...), so results appear progressively while the rest indexes. Views with nothing cached are pulled from the GCP API in the background while the search is open, and results keep updating as the data arrives.
+
+| Key | Action |
+|---|---|
+| type | Live results, rows capped at 100 (the title shows `100+` when more) |
+| `Tab` | Toggle scope between all projects and the current project |
+| `Enter` | Move focus to the results table |
+| `Enter` on a row | Jump: opens the hit's view with the project selected and the filter preset to the hit's name |
+| `Esc` | Close the search (the query is kept for the next open) |
+
+Terms work like the filter: space-separated substrings, all of which must match, `-x` excludes. Matching is case-insensitive across the whole row.
 
 ## Filtering
 

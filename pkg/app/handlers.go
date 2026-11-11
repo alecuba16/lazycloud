@@ -107,6 +107,12 @@ func init() {
 		}},
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
+		{
+			key:     'S',
+			desc:    "search all projects",
+			enabled: func(a *app) bool { return !inVMView() },
+			run:     (*app).openSearch,
+		},
 		{key: ' ', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '2', desc: "show VMs", run: func(a *app) { showVMs(a) }},
@@ -393,6 +399,11 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyCtrlC:
 		a.quit()
 		return nil
+	case tcell.KeyCtrlP:
+		if a.tapp.GetFocus() != a.cmd {
+			a.openSearch()
+			return nil
+		}
 	case tcell.KeyEsc:
 		a.escapePressed()
 		return nil
@@ -404,6 +415,15 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		if appState.CmdMode == modeCmd && a.tapp.GetFocus() == a.cmd {
 			a.completeCommand(event.Key() == tcell.KeyTab)
 			return nil
+		}
+	}
+	// While the search page has focus, runes are query text or results
+	// navigation: only Esc (close) and Tab (scope) act, both handled by the
+	// search widgets themselves.
+	if a.searchOpen.Load() {
+		focus := a.tapp.GetFocus()
+		if focus == a.searchInput || focus == a.searchResults {
+			return event
 		}
 	}
 	if a.tapp.GetFocus() == a.cmd {
@@ -1165,6 +1185,10 @@ func (a *app) quit() {
 func (a *app) escapePressed() {
 	if name, _ := a.pages.GetFrontPage(); name == "help" {
 		a.toggleHelp()
+		return
+	}
+	if a.searchOpen.Load() {
+		a.closeSearch()
 		return
 	}
 	if name, _ := a.pages.GetFrontPage(); name == "vm" || name == "ip" || name == "lb" || name == "dns" || name == "cluster" || name == "row" || name == "route" {
