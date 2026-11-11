@@ -44,13 +44,16 @@ type app struct {
 	autoFetched      map[string]bool
 	staleAutoRefresh bool
 
-	searchIndex   *searchIndex
-	searchQuery   string
-	searchScope   searchScope
-	searchHits    []searchEntry
-	searchInput   *tview.InputField
-	searchResults *tview.Table
-	searchOpen    atomic.Bool
+	searchIndex      *searchIndex
+	searchQuery      string
+	searchHits       []searchEntry
+	searchInput      *tview.InputField
+	searchResults    *tview.Table
+	searchPanel      *tview.Flex
+	searchColumn     *tview.Flex
+	searchGroupRows  []searchGroupRow
+	searchPanelFocus bool
+	searchOpen       atomic.Bool
 }
 
 func newSummaryPanel() *tview.TextView {
@@ -226,6 +229,7 @@ func (a *app) applyThemeToWidgets() {
 		a.searchInput.SetBorderColor(theme.borderColor())
 		a.searchResults.SetBorderColor(theme.borderColor())
 		a.searchResults.SetTitleColor(theme.titleColor())
+		a.searchResults.SetSeparator('│')
 	}
 	a.summary.SetTextColor(theme.summaryTextColor())
 	a.status.SetTextColor(theme.statusTextColor())

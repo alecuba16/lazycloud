@@ -85,6 +85,8 @@ func Run() error {
 
 	a.info.SetBorder(true)
 
+	a.buildSearchPanel()
+
 	shortcutsTable := newShortcutsPanel()
 	helpOverlay, helpRow := newHelpOverlay(shortcutsTable)
 	a.shortcuts = shortcutsTable
@@ -105,7 +107,15 @@ func Run() error {
 		AddItem(a.status, 1, 1, false)
 	a.mainView = mainView
 
-	a.pages.AddPage("main", mainView, true, true)
+	// searchColumn hosts the global search side panel next to the main view;
+	// it stays zero-width until search opens, then takes a fixed slice so the
+	// main view shrinks instead of being covered.
+	searchColumn := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(a.searchPanel, 0, 0, false).
+		AddItem(mainView, 0, 1, false)
+	a.searchColumn = searchColumn
+
+	a.pages.AddPage("main", searchColumn, true, true)
 	a.pages.AddPage("help", helpOverlay, true, false)
 
 	a.cmd.SetDoneFunc(a.done)

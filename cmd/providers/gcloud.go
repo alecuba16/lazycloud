@@ -101,20 +101,20 @@ type VMServiceAccount struct {
 }
 
 type VM struct {
-	ProjectID       string
-	Name            string
-	InstanceID      string
-	Zone            string
-	MachineType     string
-	Status          string
-	Labels          map[string]string
-	NetworkTags     []string
-	ServiceAccounts []VMServiceAccount
+	ProjectID        string
+	Name             string
+	InstanceID       string
+	Zone             string
+	MachineType      string
+	Status           string
+	Labels           map[string]string
+	NetworkTags      []string
+	ServiceAccounts  []VMServiceAccount
 	InstanceTemplate string
-	Interfaces      []VMInterface
-	BootDisk        *VMDisk
-	DataDisks       []VMDisk
-	UpdatedAt       string
+	Interfaces       []VMInterface
+	BootDisk         *VMDisk
+	DataDisks        []VMDisk
+	UpdatedAt        string
 }
 
 type Disk struct {
@@ -518,25 +518,25 @@ func ListProjectVMs(projectID string) ([]VM, error) {
 			if inst.GetZone() == "" {
 				continue
 			}
-vm := VM{
-			ProjectID:   projectID,
-			Name:        inst.GetName(),
-			InstanceID:  strconv.FormatUint(inst.GetId(), 10),
-			Zone:        resourceShortName(inst.GetZone(), ""),
-			MachineType: resourceShortName(inst.GetMachineType(), ""),
-			Status:      inst.GetStatus(),
-			Labels:      inst.GetLabels(),
-			NetworkTags: inst.GetTags().GetItems(),
-		}
-		for _, sa := range inst.GetServiceAccounts() {
-			vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
-		}
-		for _, m := range inst.GetMetadata().GetItems() {
-			if m.GetKey() == "instance-template" {
-				vm.InstanceTemplate = resourceShortName(m.GetValue(), "")
-				break
+			vm := VM{
+				ProjectID:   projectID,
+				Name:        inst.GetName(),
+				InstanceID:  strconv.FormatUint(inst.GetId(), 10),
+				Zone:        resourceShortName(inst.GetZone(), ""),
+				MachineType: resourceShortName(inst.GetMachineType(), ""),
+				Status:      inst.GetStatus(),
+				Labels:      inst.GetLabels(),
+				NetworkTags: inst.GetTags().GetItems(),
 			}
-		}
+			for _, sa := range inst.GetServiceAccounts() {
+				vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
+			}
+			for _, m := range inst.GetMetadata().GetItems() {
+				if m.GetKey() == "instance-template" {
+					vm.InstanceTemplate = resourceShortName(m.GetValue(), "")
+					break
+				}
+			}
 			for _, iface := range inst.GetNetworkInterfaces() {
 				vmi := VMInterface{
 					Network:    resourceShortName(iface.GetNetwork(), ""),
@@ -1257,10 +1257,10 @@ func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
 	for _, item := range list.Items {
 		node := ClusterNode{
 			ProjectID: projectID,
-			Cluster:    name,
-			Name:       item.Metadata.Name,
-			NodePool:   item.Metadata.Labels["cloud.google.com/gke-nodepool"],
-			Status:     "NotReady",
+			Cluster:   name,
+			Name:      item.Metadata.Name,
+			NodePool:  item.Metadata.Labels["cloud.google.com/gke-nodepool"],
+			Status:    "NotReady",
 		}
 		for _, c := range item.Status.Conditions {
 			if c.Type == "Ready" {

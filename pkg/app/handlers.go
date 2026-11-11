@@ -108,10 +108,9 @@ func init() {
 		{key: '/', desc: "filter list ('- x' excludes, Tab details)", run: (*app).startFilter},
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{
-			key:     'S',
-			desc:    "search all projects",
-			enabled: func(a *app) bool { return !inVMView() },
-			run:     (*app).openSearch,
+			key:  'S',
+			desc: "global search side panel",
+			run:  (*app).openSearch,
 		},
 		{key: ' ', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
 		{key: '1', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
@@ -399,15 +398,17 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyCtrlC:
 		a.quit()
 		return nil
-	case tcell.KeyCtrlP:
-		if a.tapp.GetFocus() != a.cmd {
-			a.openSearch()
-			return nil
-		}
 	case tcell.KeyEsc:
 		a.escapePressed()
 		return nil
 	case tcell.KeyTab, tcell.KeyBacktab:
+		// While the search panel is open, Tab moves focus between the panel
+		// and the main view; the panel stays open either way. The filter
+		// input keeps Tab for detail completion while typing.
+		if a.searchOpen.Load() && a.tapp.GetFocus() != a.cmd {
+			a.toggleSearchFocus()
+			return nil
+		}
 		if appState.CmdMode == modeFilter && (a.tapp.GetFocus() == a.cmd || a.tapp.GetFocus() == a.info) {
 			a.completeFilterDetail(event.Key() == tcell.KeyTab)
 			return nil
@@ -417,9 +418,9 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 			return nil
 		}
 	}
-	// While the search page has focus, runes are query text or results
-	// navigation: only Esc (close) and Tab (scope) act, both handled by the
-	// search widgets themselves.
+	// While the search panel has focus, runes are query text or results
+	// navigation: only Esc (close) and Tab (focus toggle) act, both handled
+	// above, so everything else reaches the panel widgets untouched.
 	if a.searchOpen.Load() {
 		focus := a.tapp.GetFocus()
 		if focus == a.searchInput || focus == a.searchResults {

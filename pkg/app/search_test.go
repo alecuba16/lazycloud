@@ -5,10 +5,11 @@ import (
 	"testing"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/rivo/tview"
 )
 
 // seedSearchRows fills the cache with one VM in p1 and one in p2, plus a
-// bucket in p1 only, so index and scope behavior has real rows to match.
+// bucket in p1 only, so index and panel behavior has real rows to match.
 func seedSearchRows(t *testing.T, a *app) {
 	t.Helper()
 	if err := a.cache.SaveProjects([]providers.Project{
@@ -60,6 +61,23 @@ func buildSearchIndexSync(t *testing.T, a *app) {
 	}
 }
 
+// newSearchTestApp returns an app with the panel built and wired into a
+// search column, mirroring what run() sets up.
+func newSearchTestApp(t *testing.T) *app {
+	t.Helper()
+	a := newFilterTestApp(t)
+	a.buildSearchPanel()
+	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(a.summary, 4, 1, false).
+		AddItem(a.cmd, 0, 0, false).
+		AddItem(a.info, 0, 1, false).
+		AddItem(a.status, 1, 1, false)
+	a.searchColumn = tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(a.searchPanel, 0, 0, false).
+		AddItem(mainView, 0, 1, false)
+	return a
+}
+
 func TestSearchIndexedKindMapping(t *testing.T) {
 	cases := []struct {
 		kind viewKind
@@ -93,7 +111,7 @@ func TestSearchMatchScopeAndExcludes(t *testing.T) {
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
 
-	hits := a.searchIndex.match("alpha", searchAllProjects, "")
+	hits := a.searchIndex.match("alpha")
 	if len(hits) == 0 {
 		t.Fatal("match(alpha) returned no hits")
 	}
@@ -103,7 +121,7 @@ func TestSearchMatchScopeAndExcludes(t *testing.T) {
 		}
 	}
 
-	hits = a.searchIndex.match("beta", searchAllProjects, "")
+	hits = a.searchIndex.match("beta")
 	if len(hits) != 1 {
 		t.Fatalf("match(beta) = %d hits, want 1", len(hits))
 	}
@@ -111,7 +129,7 @@ func TestSearchMatchScopeAndExcludes(t *testing.T) {
 		t.Errorf("hit project = %q, want p2", hits[0].project)
 	}
 
-	hits = a.searchIndex.match("alpha -bucket", searchAllProjects, "")
+	hits = a.searchIndex.match("alpha -bucket")
 	for _, hit := range hits {
 		if strings.Contains(hit.text, "bucket") {
 			t.Errorf("excluded term matched: %q", hit.text)
@@ -120,7 +138,7 @@ func TestSearchMatchScopeAndExcludes(t *testing.T) {
 }
 
 func TestSearchOpenClosePreservesQuery(t *testing.T) {
-	a := newFilterTestApp(t)
+	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
 
@@ -132,7 +150,7 @@ func TestSearchOpenClosePreservesQuery(t *testing.T) {
 	if a.searchInput.GetText() != "alpha" {
 		t.Fatalf("input text = %q, want alpha", a.searchInput.GetText())
 	}
-	if got := len(a.searchIndex.match("alpha", searchAllProjects, "")); got == 0 {
+	if got := len(a.searchIndex.match("alpha")); got == 0 {
 		t.Error("no hits for seeded query")
 	}
 	a.closeSearch()
@@ -149,38 +167,73 @@ func TestSearchOpenClosePreservesQuery(t *testing.T) {
 	a.closeSearch()
 }
 
-func TestSearchScopeCycling(t *testing.T) {
-	a := newFilterTestApp(t)
+func TestSearchPanelGroupsResultsByKind(t *testing.T) {
+	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
 
+	a.openSearch()
+	a.searchInput.SetText("alpha")
+	a.runSearch()
+
+	if len(a.searchGroupRows) == 0 {
+		t.Fatal("no grouped rows after search")
+	}
+	var headers int
+	for _, g := range a.searchGroupRows {
+		if g.header {
+			headers++
+		}
+	}
+	if headers < 2 {
+		t.Fatalf("group headers = %d, want at least 2 (vms + buckets)", headers)
+	}
+	if got := a.searchResults.GetRowCount() - 1; got != len(a.searchGroupRows) {
+		t.Fatalf("table rows = %d, want %d", got, len(a.searchGroupRows))
+	}
+	cell := a.searchResults.GetCell(1, 0)
+	if !strings.Contains(cell.Text, "VMs (1)") {
+		t.Errorf("first group header = %q, want VMs count in title", cell.Text)
+	}
+}
+
+func TestSearchGroupHeaderOpensView(t *testing.T) {
+	a := newSearchTestApp(t)
+	seedSearchRows(t, a)
+	buildSearchIndexSync(t, a)
+
+	a.openSearch()
+	a.searchInput.SetText("alpha")
+	a.runSearch()
+
+	// The first group header is the VMs section.
 	appState.ProjectID = "p1"
-	a.searchScope = searchAllProjects
-	a.cycleSearchScope()
-	if a.searchScope != searchCurrentProject {
-		t.Fatalf("scope after cycle = %v, want current project", a.searchScope)
+	a.searchSelect(1)
+	if appState.ViewKind != viewVMs {
+		t.Errorf("ViewKind = %q, want vms", appState.ViewKind)
 	}
-	if got := len(a.searchIndex.match("alpha", a.searchScope, appState.ProjectID)); got != 2 {
-		t.Errorf("current-project alpha hits = %d, want 2", got)
+	if !a.searchOpen.Load() {
+		t.Error("panel closed by group header select, want it open")
 	}
-	a.cycleSearchScope()
-	if a.searchScope != searchAllProjects {
-		t.Fatalf("scope after second cycle = %v, want all projects", a.searchScope)
+	if a.searchPanelFocus {
+		t.Error("panel still focused after group header select, want main view")
 	}
 }
 
 func TestSearchJumpPresetsFilterAndSelects(t *testing.T) {
-	a := newFilterTestApp(t)
+	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
 
 	a.openSearch()
 	a.searchInput.SetText("beta-db")
 	a.runSearch()
-	if len(a.searchHits) != 1 {
-		t.Fatalf("searchHits = %d, want 1", len(a.searchHits))
+
+	// Find the hit row (the row after the VMs group header).
+	if len(a.searchGroupRows) < 2 {
+		t.Fatalf("searchGroupRows = %d, want at least 2", len(a.searchGroupRows))
 	}
-	a.searchJump(1)
+	a.searchSelect(2)
 	if a.searchOpen.Load() {
 		t.Error("search still open after jump")
 	}
@@ -199,4 +252,27 @@ func TestSearchJumpPresetsFilterAndSelects(t *testing.T) {
 	if row, _ := a.info.GetSelection(); row != 1 {
 		t.Errorf("selected row = %d, want 1", row)
 	}
+}
+
+func TestSearchTabTogglesFocus(t *testing.T) {
+	a := newSearchTestApp(t)
+	seedSearchRows(t, a)
+	buildSearchIndexSync(t, a)
+
+	a.openSearch()
+	if !a.searchPanelFocus {
+		t.Fatal("panel focus not set after openSearch")
+	}
+	a.toggleSearchFocus()
+	if a.searchPanelFocus {
+		t.Fatal("panel focus still set after toggleSearchFocus")
+	}
+	if !a.searchOpen.Load() {
+		t.Fatal("panel closed by focus toggle")
+	}
+	a.toggleSearchFocus()
+	if !a.searchPanelFocus {
+		t.Fatal("panel focus not restored by second toggle")
+	}
+	a.closeSearch()
 }
