@@ -173,7 +173,7 @@ func (a *app) fetchTemplateVMs(template string) {
 		return
 	}
 	a.logger.Update("vms", projectID, len(vms))
-	a.tapp.QueueUpdateDraw(func() {
+	a.queueUpdateDraw(func() {
 		a.setView(viewVMs)
 		a.applyTemplateVMFilter(template)
 	})

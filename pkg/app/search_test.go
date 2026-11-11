@@ -62,10 +62,11 @@ func buildSearchIndexSync(t *testing.T, a *app) {
 }
 
 // newSearchTestApp returns an app with the panel built and wired into a
-// search column, mirroring what run() sets up.
+// search column, mirroring what run() sets up. Built on the fetch test
+// app so background pulls have a logger.
 func newSearchTestApp(t *testing.T) *app {
 	t.Helper()
-	a := newFilterTestApp(t)
+	a := newFetchTestApp(t)
 	a.buildSearchPanel()
 	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(a.summary, 4, 1, false).

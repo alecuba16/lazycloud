@@ -47,7 +47,7 @@ var projectsView = viewDef{
 			}
 			a.logger.Update("projects", "all", len(saved))
 			a.markViewUpdated(viewProjects, appState.ProjectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewProjects)
 				a.statusText(fmt.Sprintf("[green]Fetched %d projects[-]", len(saved)))
 			})

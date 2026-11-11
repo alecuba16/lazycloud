@@ -64,7 +64,7 @@ var bucketIAMView = viewDef{
 			}
 			a.logger.Update("bucket-iam", projectID+"/"+bucket, len(bindings))
 			a.markViewUpdated(viewBucketIAM, projectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewBucketIAM)
 				a.statusText(fmt.Sprintf("[green]Fetched %d IAM bindings[-]", len(bindings)))
 			})

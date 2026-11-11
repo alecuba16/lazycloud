@@ -169,7 +169,7 @@ func (a *app) fetchInstanceGroupVMs(location, group string) {
 		a.reportError("instance-groups", projectID+"/"+group, "Failed to fetch instance group VMs", err)
 		return
 	}
-	a.tapp.QueueUpdateDraw(func() {
+	a.queueUpdateDraw(func() {
 		a.setView(viewVMs)
 		a.applyInstanceGroupVMFilter(group, members)
 	})

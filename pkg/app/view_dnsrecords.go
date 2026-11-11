@@ -62,7 +62,7 @@ var dnsRecordsView = viewDef{
 			}
 			a.logger.Update("dns-records", projectID+"/"+zone, len(records))
 			a.markViewUpdated(viewDNSRecords, projectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewDNSRecords)
 				a.statusText(fmt.Sprintf("[green]Fetched %d dns records[-]", len(records)))
 			})

@@ -18,6 +18,10 @@ func checkNestedExecution() error {
 	return errors.New("Detected nested lazycloud execution. Exit this context to start lazycloud")
 }
 
+// newTApp builds the tview application. A package var so tests can hand
+// run() an application already wired to a simulation screen.
+var newTApp = tview.NewApplication
+
 func Run() error {
 	if err := checkNestedExecution(); err != nil {
 		return err
@@ -88,7 +92,7 @@ func bootApp() (*app, func(), error) {
 		appState.ProjectNumber = lastProject.ProjectNumber
 	}
 
-	tapp := tview.NewApplication()
+	tapp := newTApp()
 
 	a := &app{
 		tapp:             tapp,

@@ -92,7 +92,7 @@ var nodePoolsView = viewDef{
 			}
 			a.logger.Update("cluster-nodes", projectID+"/"+clusterName, len(nodes))
 			a.markViewUpdated(viewNodePools, projectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewNodePools)
 				a.statusText(fmt.Sprintf("[green]Fetched %d nodes[-]", len(nodes)))
 			})
@@ -167,7 +167,7 @@ func (a *app) fetchNodePoolVMs(pool string) {
 	} else {
 		a.logger.Update("disks", projectID, len(disks))
 	}
-	a.tapp.QueueUpdateDraw(func() {
+	a.queueUpdateDraw(func() {
 		a.setView(viewVMs)
 		a.applyNodePoolVMFilter(pool)
 	})

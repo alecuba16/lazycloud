@@ -504,8 +504,21 @@ func ListProjectVMs(projectID string) ([]VM, error) {
 	}
 	defer client.Close()
 
-	var vms []VM
 	it := client.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{Project: projectID})
+	return collectZoneVMs(projectID, it)
+}
+
+// zoneEntryIterator is the slice of the aggregated-list iterator the VM
+// collection needs: entries of zone to instances. Keeping it an interface
+// lets the collector run against a canned iterator in tests.
+type zoneEntryIterator interface {
+	Next() (computev1.InstancesScopedListPair, error)
+}
+
+// collectZoneVMs drains it, mapping each zone entry through zoneVMs. The
+// iterator ends with iterator.Done; any other error stops the walk.
+func collectZoneVMs(projectID string, it zoneEntryIterator) ([]VM, error) {
+	var vms []VM
 	for {
 		entry, err := it.Next()
 		if err == iterator.Done {
@@ -1262,6 +1275,12 @@ func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
 		return nil, fmt.Errorf("kubectl get: %s", strings.TrimSpace(message))
 	}
 
+	return parseClusterNodeList(out, projectID, name)
+}
+
+// parseClusterNodeList decodes kubectl node output into cache rows. Split
+// from ListClusterNodes so the decode path is testable without kubectl.
+func parseClusterNodeList(out []byte, projectID, name string) ([]ClusterNode, error) {
 	var list k8sNodeList
 	if err := json.Unmarshal(out, &list); err != nil {
 		return nil, err

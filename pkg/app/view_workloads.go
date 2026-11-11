@@ -73,7 +73,7 @@ var workloadsView = viewDef{
 			}
 			a.logger.Update("workloads", projectID+"/"+clusterName, len(workloads))
 			a.markViewUpdated(viewWorkloads, projectID)
-			a.tapp.QueueUpdateDraw(func() {
+			a.queueUpdateDraw(func() {
 				a.setView(viewWorkloads)
 				a.statusText(fmt.Sprintf("[green]Fetched %d workloads[-]", len(workloads)))
 			})
