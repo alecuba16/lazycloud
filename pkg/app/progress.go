@@ -71,7 +71,9 @@ func (p *progress) finish() {
 
 // queueUpdateDraw runs f on the UI thread. QueueUpdateDraw blocks until the
 // event loop picks the update up, which deadlocks when no event loop runs
-// (tests, early startup), so before that f runs inline.
+// (tests, early startup), so before that f runs inline. f must not call
+// queueUpdateDraw again: the inline path holds a non-reentrant lock and a
+// nested QueueUpdateDraw would block the UI thread.
 func (a *app) queueUpdateDraw(f func()) {
 	if a.uiRunning.Load() {
 		a.tapp.QueueUpdateDraw(func() {

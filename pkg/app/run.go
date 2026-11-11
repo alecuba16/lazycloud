@@ -153,5 +153,9 @@ func (a *app) runUI() error {
 		return false
 	})
 	a.uiRunning.Store(true)
-	return a.tapp.Run()
+	err := a.tapp.Run()
+	// Back to inline mode once the loop is gone, so a late queued callback
+	// cannot block forever on a dead event loop.
+	a.uiRunning.Store(false)
+	return err
 }
