@@ -41,7 +41,7 @@ func vpnGatewayResource(a *app, projectID, region, name string) (any, error) {
 }
 
 func fetchProjectVPNs(a *app, projectID string) (int, string, error) {
-	gateways, err := providers.ListProjectVPNGateways(projectID)
+	gateways, err := listProjectVPNGateways(projectID)
 	if err != nil {
 		return 0, "", err
 	}

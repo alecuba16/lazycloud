@@ -34,7 +34,7 @@ var publicImagesView = viewDef{
 						a.statusInfo(cur)
 					}
 				})
-				images, err := providers.ListProjectImages(projectID)
+				images, err := listProjectImages(projectID)
 				if err != nil {
 					a.reportError("public-images", projectID, "Failed to fetch public images from "+projectID, err)
 					failed++

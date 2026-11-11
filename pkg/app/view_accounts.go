@@ -45,7 +45,7 @@ func serviceAccountResource(a *app, projectID, email string) (any, error) {
 }
 
 func fetchProjectAccounts(a *app, projectID string) (int, string, error) {
-	accounts, err := providers.ListProjectServiceAccounts(projectID)
+	accounts, err := listProjectServiceAccounts(projectID)
 	if err != nil {
 		return 0, "", err
 	}

@@ -44,7 +44,7 @@ func iamBindingResource(a *app, projectID, member, role string) (any, error) {
 }
 
 func fetchProjectIAM(a *app, projectID string) (int, string, error) {
-	bindings, err := providers.ListProjectIAMPolicy(projectID)
+	bindings, err := listProjectIAMPolicy(projectID)
 	if err != nil {
 		return 0, "", err
 	}

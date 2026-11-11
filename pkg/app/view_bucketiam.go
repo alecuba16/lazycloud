@@ -53,7 +53,7 @@ var bucketIAMView = viewDef{
 		go func() {
 			projectID := appState.BucketProject
 			bucket := appState.Bucket
-			bindings, err := providers.ListBucketIAMPolicy(projectID, bucket)
+			bindings, err := listBucketIAMPolicy(projectID, bucket)
 			if err != nil {
 				a.reportError("bucket-iam", projectID+"/"+bucket, "Failed to fetch bucket IAM policy", err)
 				return

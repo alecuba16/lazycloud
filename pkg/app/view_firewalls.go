@@ -38,7 +38,7 @@ func firewallRuleResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectFirewalls(a *app, projectID string) (int, string, error) {
-	rules, err := providers.ListProjectFirewallRules(projectID)
+	rules, err := listProjectFirewallRules(projectID)
 	if err != nil {
 		return 0, "", err
 	}

@@ -47,7 +47,7 @@ func vmResource(a *app, projectID, zone, name string) (any, error) {
 }
 
 func fetchProjectVMs(a *app, projectID string) (int, string, error) {
-	vms, err := providers.ListProjectVMs(projectID)
+	vms, err := listProjectVMs(projectID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -55,7 +55,7 @@ func fetchProjectVMs(a *app, projectID string) (int, string, error) {
 		return 0, "", err
 	}
 	a.logger.Update("vms", projectID, len(vms))
-	disks, err := providers.ListProjectDisks(projectID)
+	disks, err := listProjectDisks(projectID)
 	if err != nil {
 		a.reportError("disks", projectID, "Failed to fetch disks", err)
 	} else if err := a.cache.SaveDisks(projectID, disks); err != nil {

@@ -88,11 +88,11 @@ func pscResource(a *app, projectID, kind, region, name string) (any, error) {
 }
 
 func fetchProjectPSC(a *app, projectID string) (int, string, error) {
-	attachments, err := providers.ListProjectServiceAttachments(projectID)
+	attachments, err := listProjectServiceAttach(projectID)
 	if err != nil {
 		return 0, "", err
 	}
-	rules, err := providers.ListProjectForwardingRules(projectID)
+	rules, err := listProjectForwardingRules(projectID)
 	if err != nil {
 		return 0, "", err
 	}

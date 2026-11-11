@@ -64,7 +64,7 @@ func instanceTemplateResource(a *app, projectID, location, name string) (any, er
 }
 
 func fetchProjectInstanceTemplates(a *app, projectID string) (int, string, error) {
-	templates, err := providers.ListProjectInstanceTemplates(projectID)
+	templates, err := listProjectInstanceTpl(projectID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -163,7 +163,7 @@ func (a *app) applyTemplateVMFilter(template string) {
 
 func (a *app) fetchTemplateVMs(template string) {
 	projectID := appState.ProjectID
-	vms, err := providers.ListProjectVMs(projectID)
+	vms, err := listProjectVMs(projectID)
 	if err != nil {
 		a.reportError("vms", projectID, "Failed to fetch VMs", err)
 		return

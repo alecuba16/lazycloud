@@ -39,7 +39,7 @@ func diskResource(a *app, projectID, zone, name string) (any, error) {
 }
 
 func fetchProjectDisks(a *app, projectID string) (int, string, error) {
-	disks, err := providers.ListProjectDisks(projectID)
+	disks, err := listProjectDisks(projectID)
 	if err != nil {
 		return 0, "", err
 	}

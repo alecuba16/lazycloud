@@ -51,7 +51,7 @@ var dnsRecordsView = viewDef{
 		go func() {
 			projectID := appState.ZoneProject
 			zone := appState.Zone
-			records, err := providers.ListZoneDNSRecords(projectID, zone)
+			records, err := listZoneDNSRecords(projectID, zone)
 			if err != nil {
 				a.reportError("dns-records", projectID+"/"+zone, "Failed to fetch dns records", err)
 				return

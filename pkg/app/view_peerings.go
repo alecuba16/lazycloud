@@ -54,7 +54,7 @@ func peeringResource(a *app, projectID, network, name string) (any, error) {
 }
 
 func fetchProjectPeerings(a *app, projectID string) (int, string, error) {
-	peerings, err := providers.ListProjectPeerings(projectID)
+	peerings, err := listProjectPeerings(projectID)
 	if err != nil {
 		return 0, "", err
 	}

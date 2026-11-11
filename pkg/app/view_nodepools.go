@@ -81,7 +81,7 @@ var nodePoolsView = viewDef{
 		go func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
-			nodes, err := providers.ListClusterNodes(projectID, cl.Location, clusterName)
+			nodes, err := listClusterNodes(projectID, cl.Location, clusterName)
 			if err != nil {
 				a.reportError("cluster-nodes", projectID+"/"+clusterName, "Failed to fetch nodes", err)
 				return
@@ -149,7 +149,7 @@ func (a *app) applyNodePoolVMFilter(pool string) {
 
 func (a *app) fetchNodePoolVMs(pool string) {
 	projectID := appState.ProjectID
-	vms, err := providers.ListProjectVMs(projectID)
+	vms, err := listProjectVMs(projectID)
 	if err != nil {
 		a.reportError("vms", projectID, "Failed to fetch VMs", err)
 		return
@@ -159,7 +159,7 @@ func (a *app) fetchNodePoolVMs(pool string) {
 		return
 	}
 	a.logger.Update("vms", projectID, len(vms))
-	disks, err := providers.ListProjectDisks(projectID)
+	disks, err := listProjectDisks(projectID)
 	if err != nil {
 		a.reportError("disks", projectID, "Failed to fetch disks", err)
 	} else if err := a.cache.SaveDisks(projectID, disks); err != nil {

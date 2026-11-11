@@ -62,7 +62,7 @@ var workloadsView = viewDef{
 		go func() {
 			projectID := appState.ClusterProject
 			clusterName := appState.Cluster
-			workloads, err := providers.ListClusterWorkloads(projectID, cl.Location, clusterName)
+			workloads, err := listClusterWorkloads(projectID, cl.Location, clusterName)
 			if err != nil {
 				a.reportError("workloads", projectID+"/"+clusterName, "Failed to fetch workloads", err)
 				return

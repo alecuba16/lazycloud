@@ -39,7 +39,7 @@ func imageResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectImages(a *app, projectID string) (int, string, error) {
-	images, err := providers.ListProjectImages(projectID)
+	images, err := listProjectImages(projectID)
 	if err != nil {
 		return 0, "", err
 	}

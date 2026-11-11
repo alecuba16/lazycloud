@@ -62,7 +62,7 @@ func ipAddressRows(ips []providers.IPAddress) [][]string {
 }
 
 func fetchProjectIPs(a *app, projectID string) (int, string, error) {
-	ips, err := providers.ListProjectIPAddresses(projectID)
+	ips, err := listProjectIPAddresses(projectID)
 	if err != nil {
 		return 0, "", err
 	}

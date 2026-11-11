@@ -36,7 +36,7 @@ func dnsZoneResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectDNSZones(a *app, projectID string) (int, string, error) {
-	zones, err := providers.ListProjectDNSZones(projectID)
+	zones, err := listProjectDNSZones(projectID)
 	if err != nil {
 		return 0, "", err
 	}

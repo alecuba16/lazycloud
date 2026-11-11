@@ -38,7 +38,7 @@ func snapshotResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectSnapshots(a *app, projectID string) (int, string, error) {
-	snapshots, err := providers.ListProjectSnapshots(projectID)
+	snapshots, err := listProjectSnapshots(projectID)
 	if err != nil {
 		return 0, "", err
 	}

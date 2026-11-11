@@ -39,7 +39,7 @@ func reservationResource(a *app, projectID, zone, name string) (any, error) {
 }
 
 func fetchProjectReservations(a *app, projectID string) (int, string, error) {
-	reservations, err := providers.ListProjectReservations(projectID)
+	reservations, err := listProjectReservations(projectID)
 	if err != nil {
 		return 0, "", err
 	}

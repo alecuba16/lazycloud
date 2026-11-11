@@ -46,7 +46,7 @@ func cloudRouterResource(a *app, projectID, region, name string) (any, error) {
 }
 
 func fetchProjectCloudRouters(a *app, projectID string) (int, string, error) {
-	routers, err := providers.ListProjectCloudRouters(projectID)
+	routers, err := listProjectCloudRouters(projectID)
 	if err != nil {
 		return 0, "", err
 	}

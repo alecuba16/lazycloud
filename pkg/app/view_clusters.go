@@ -50,7 +50,7 @@ func clusterResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectClusters(a *app, projectID string) (int, string, error) {
-	clusters, err := providers.ListProjectClusters(projectID)
+	clusters, err := listProjectClusters(projectID)
 	if err != nil {
 		return 0, "", err
 	}

@@ -36,7 +36,7 @@ func bucketResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectBuckets(a *app, projectID string) (int, string, error) {
-	buckets, err := providers.ListProjectBuckets(projectID)
+	buckets, err := listProjectBuckets(projectID)
 	if err != nil {
 		return 0, "", err
 	}

@@ -5,7 +5,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/elferherrera/lazycloud/cmd/providers"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -213,7 +212,7 @@ func (a *app) ensureSearchProjects() {
 	idx.projectsPulled = true
 	idx.mu.Unlock()
 	go func() {
-		projects, err := providers.ListGcloudProjects()
+		projects, err := listGcloudProjects()
 		if err != nil {
 			a.reportError("projects", "all", "Search failed to fetch projects", err)
 			return

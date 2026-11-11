@@ -31,7 +31,7 @@ var projectsView = viewDef{
 	refresh: func(a *app) {
 		a.statusInfo("Fetching projects...")
 		go func() {
-			projects, err := providers.ListGcloudProjects()
+			projects, err := listGcloudProjects()
 			if err != nil {
 				a.reportError("projects", "all", "Failed to fetch projects", err)
 				return

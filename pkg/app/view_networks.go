@@ -75,11 +75,11 @@ func networkResource(a *app, projectID, kind, region, name string) (any, error) 
 }
 
 func fetchProjectNetworks(a *app, projectID string) (int, string, error) {
-	networks, err := providers.ListProjectNetworks(projectID)
+	networks, err := listProjectNetworks(projectID)
 	if err != nil {
 		return 0, "", err
 	}
-	subnetworks, err := providers.ListProjectSubnetworks(projectID)
+	subnetworks, err := listProjectSubnetworks(projectID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -160,13 +160,13 @@ var networksAllView = viewDef{
 						a.statusInfo(cur)
 					}
 				})
-				networks, err := providers.ListProjectNetworks(p.ProjectID)
+				networks, err := listProjectNetworks(p.ProjectID)
 				if err != nil {
 					a.reportError("networks", p.ProjectID, "Failed to fetch networks for "+p.ProjectID, err)
 					failed++
 					continue
 				}
-				subnetworks, err := providers.ListProjectSubnetworks(p.ProjectID)
+				subnetworks, err := listProjectSubnetworks(p.ProjectID)
 				if err != nil {
 					a.reportError("networks", p.ProjectID, "Failed to fetch subnetworks for "+p.ProjectID, err)
 					failed++

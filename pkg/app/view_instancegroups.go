@@ -38,7 +38,7 @@ func instanceGroupResource(a *app, projectID, zone, name string) (any, error) {
 }
 
 func fetchProjectInstanceGroups(a *app, projectID string) (int, string, error) {
-	groups, err := providers.ListProjectInstanceGroups(projectID)
+	groups, err := listProjectInstanceGroups(projectID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -153,7 +153,7 @@ func (a *app) fetchInstanceGroupVMs(location, group string) {
 		return
 	}
 	if len(vms) == 0 {
-		vms, err = providers.ListProjectVMs(projectID)
+		vms, err = listProjectVMs(projectID)
 		if err != nil {
 			a.reportError("vms", projectID, "Failed to fetch VMs", err)
 			return
@@ -164,7 +164,7 @@ func (a *app) fetchInstanceGroupVMs(location, group string) {
 		}
 		a.logger.Update("vms", projectID, len(vms))
 	}
-	members, err := providers.ListInstanceGroupVMs(projectID, location, group)
+	members, err := listInstanceGroupVMs(projectID, location, group)
 	if err != nil {
 		a.reportError("instance-groups", projectID+"/"+group, "Failed to fetch instance group VMs", err)
 		return

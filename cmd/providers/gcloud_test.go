@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"encoding/json"
 	"testing"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -141,5 +142,64 @@ func TestInstanceToVMWithoutOptionalFields(t *testing.T) {
 	}
 	if vm.InstanceTemplate != "" {
 		t.Fatalf("instance template = %q, want empty", vm.InstanceTemplate)
+	}
+}
+
+func TestZoneVMsSkipsInstancesWithoutZone(t *testing.T) {
+	inst := &computepb.Instance{
+		Name:   strptr("no-zone"),
+		Status: strptr("RUNNING"),
+	}
+	vms := zoneVMs("p1", []*computepb.Instance{inst})
+	if len(vms) != 0 {
+		t.Fatalf("zoneVMs() = %d vms, want 0 for zone-less instance", len(vms))
+	}
+}
+
+func TestZoneVMsMapsInstances(t *testing.T) {
+	inst := &computepb.Instance{
+		Name:   strptr("vm1"),
+		Zone:   strptr("projects/p1/zones/us-east1-b"),
+		Status: strptr("RUNNING"),
+	}
+	vms := zoneVMs("p1", []*computepb.Instance{inst})
+	if len(vms) != 1 {
+		t.Fatalf("zoneVMs() = %d vms, want 1", len(vms))
+	}
+	if vms[0].Zone != "us-east1-b" || vms[0].ProjectID != "p1" {
+		t.Fatalf("zoneVMs() = %+v, want zone short name and project", vms[0])
+	}
+}
+
+func TestParseClusterNodesMapsStatusAndAddresses(t *testing.T) {
+	raw := `{"items":[
+		{
+			"metadata": {"name": "node-a", "labels": {"cloud.google.com/gke-nodepool": "pool1"}},
+			"status": {
+				"conditions": [{"type": "Ready", "status": "True"}],
+				"addresses": [{"type": "InternalIP", "address": "10.0.0.1"}]
+			}
+		},
+		{
+			"metadata": {"name": "node-b"},
+			"status": {
+				"conditions": [{"type": "Ready", "status": "False"}, {"type": "DiskPressure", "status": "True"}]
+			}
+		}
+	]}`
+	var list k8sNodeList
+	if err := json.Unmarshal([]byte(raw), &list); err != nil {
+		t.Fatalf("unmarshal() error = %v", err)
+	}
+	nodes := parseClusterNodes("p1", "prod", list.Items)
+	if len(nodes) != 2 {
+		t.Fatalf("parseClusterNodes() = %d nodes, want 2", len(nodes))
+	}
+	a := nodes[0]
+	if a.Name != "node-a" || a.NodePool != "pool1" || a.Status != "Ready" || a.InternalIP != "10.0.0.1" {
+		t.Fatalf("ready node = %+v", a)
+	}
+	if nodes[1].Status != "NotReady" || nodes[1].InternalIP != "" {
+		t.Fatalf("not-ready node = %+v", nodes[1])
 	}
 }

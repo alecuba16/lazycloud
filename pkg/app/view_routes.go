@@ -44,7 +44,7 @@ func routeResource(a *app, projectID, name string) (any, error) {
 }
 
 func fetchProjectRoutes(a *app, projectID string) (int, string, error) {
-	routes, err := providers.ListProjectRoutes(projectID)
+	routes, err := listProjectRoutes(projectID)
 	if err != nil {
 		return 0, "", err
 	}

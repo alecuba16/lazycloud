@@ -32,24 +32,44 @@ func Run() error {
 	appState.CmdMode = modeCmd
 	appState.ViewKind = viewProjects
 
+	a, cleanup, err := bootApp()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	return a.runUI()
+}
+
+// bootApp builds the app: cache, logger, config, widgets and layout. The
+// returned cleanup closes the cache and log; the caller runs it after the UI
+// loop ends. Split from Run so tests can boot the same app and drive the
+// loop against a simulation screen.
+func bootApp() (*app, func(), error) {
 	cache, err := providers.NewCache()
 	if err != nil {
-		return fmt.Errorf("opening cache: %w", err)
+		return nil, nil, fmt.Errorf("opening cache: %w", err)
 	}
 	if err := cache.SeedViewUpdates(viewKindNames()); err != nil {
-		return fmt.Errorf("seeding view updates: %w", err)
+		cache.Close()
+		return nil, nil, fmt.Errorf("seeding view updates: %w", err)
 	}
-	defer cache.Close()
 
 	logger, err := providers.NewLogger()
 	if err != nil {
-		return fmt.Errorf("opening log file: %w", err)
+		cache.Close()
+		return nil, nil, fmt.Errorf("opening log file: %w", err)
 	}
-	defer logger.Close()
+
+	cleanup := func() {
+		cache.Close()
+		logger.Close()
+	}
 
 	config, err := providers.LoadConfig(defaultThemeConfig(), defaultShortcutConfig(), defaultAutoUpdateConfig(), defaultInfobarConfig())
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		cleanup()
+		return nil, nil, fmt.Errorf("loading config: %w", err)
 	}
 	applyShortcutConfig(config.Shortcuts)
 	applyTheme(config.Theme)
@@ -59,7 +79,8 @@ func Run() error {
 
 	lastProject, err := providers.LoadLastProject()
 	if err != nil {
-		return fmt.Errorf("loading last project: %w", err)
+		cleanup()
+		return nil, nil, fmt.Errorf("loading last project: %w", err)
 	}
 	if lastProject.ProjectID != "" {
 		appState.ProjectID = lastProject.ProjectID
@@ -114,11 +135,17 @@ func Run() error {
 	tapp.SetRoot(a.pages, true)
 	tapp.SetInputCapture(a.inputCapture)
 	tapp.SetFocus(a.info)
-	tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+
+	return a, cleanup, nil
+}
+
+// runUI marks the app live and enters the event loop. The before-draw hook
+// records the screen so panel sizing can read terminal dimensions.
+func (a *app) runUI() error {
+	a.tapp.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
 		a.screen = screen
 		return false
 	})
-
 	a.uiRunning.Store(true)
-	return tapp.Run()
+	return a.tapp.Run()
 }

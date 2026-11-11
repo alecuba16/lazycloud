@@ -514,14 +514,22 @@ func ListProjectVMs(projectID string) ([]VM, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, inst := range entry.Value.GetInstances() {
-			if inst.GetZone() == "" {
-				continue
-			}
-			vms = append(vms, instanceToVM(projectID, inst))
-		}
+		vms = append(vms, zoneVMs(projectID, entry.Value.GetInstances())...)
 	}
 	return vms, nil
+}
+
+// zoneVMs maps the instances of one aggregated-list zone entry, skipping
+// instances without a zone.
+func zoneVMs(projectID string, instances []*computepb.Instance) []VM {
+	var vms []VM
+	for _, inst := range instances {
+		if inst.GetZone() == "" {
+			continue
+		}
+		vms = append(vms, instanceToVM(projectID, inst))
+	}
+	return vms
 }
 
 // instanceToVM maps one compute instance API object to the cache VM row.
@@ -1258,9 +1266,14 @@ func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
 	if err := json.Unmarshal(out, &list); err != nil {
 		return nil, err
 	}
+	return parseClusterNodes(projectID, name, list.Items), nil
+}
 
-	nodes := make([]ClusterNode, 0, len(list.Items))
-	for _, item := range list.Items {
+// parseClusterNodes maps kubectl node objects to cache rows. Nodes start
+// NotReady until a Ready condition says otherwise.
+func parseClusterNodes(projectID, name string, items []k8sNode) []ClusterNode {
+	nodes := make([]ClusterNode, 0, len(items))
+	for _, item := range items {
 		node := ClusterNode{
 			ProjectID: projectID,
 			Cluster:   name,
@@ -1284,7 +1297,7 @@ func ListClusterNodes(projectID, location, name string) ([]ClusterNode, error) {
 		}
 		nodes = append(nodes, node)
 	}
-	return nodes, nil
+	return nodes
 }
 
 type DNSZone struct {

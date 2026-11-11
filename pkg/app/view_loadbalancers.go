@@ -69,19 +69,19 @@ func resolveLB(a *app, projectID, region, name string) (*providers.LoadBalancer,
 }
 
 func refreshProjectLBs(a *app, projectID string) (int, error) {
-	rules, err := providers.ListProjectForwardingRules(projectID)
+	rules, err := listProjectForwardingRules(projectID)
 	if err != nil {
 		return 0, err
 	}
-	proxies, err := providers.ListProjectTargetProxies(projectID)
+	proxies, err := listProjectTargetProxies(projectID)
 	if err != nil {
 		return 0, err
 	}
-	urlMaps, err := providers.ListProjectURLMaps(projectID)
+	urlMaps, err := listProjectURLMaps(projectID)
 	if err != nil {
 		return 0, err
 	}
-	services, err := providers.ListProjectBackendServices(projectID)
+	services, err := listProjectBackendServices(projectID)
 	if err != nil {
 		return 0, err
 	}
