@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -13,15 +14,9 @@ import (
 // the input capture installed so GetFocus and key routing behave like the
 // real UI.
 func wireSearchApp(a *app) {
-	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(a.summary, 4, 1, false).
-		AddItem(a.cmd, 0, 0, false).
-		AddItem(a.info, 0, 1, false).
-		AddItem(a.status, 1, 1, false)
-	a.searchColumn = tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(a.searchPanel, 0, 0, false).
-		AddItem(mainView, 0, 1, false)
-	a.pages.AddPage("main", a.searchColumn, true, true)
+	helpOverlay, helpRow := newHelpOverlay(a.shortcuts)
+	a.helpRow = helpRow
+	a.buildMainLayout(helpOverlay)
 	a.tapp.SetRoot(a.pages, true)
 	a.tapp.SetInputCapture(a.inputCapture)
 	a.tapp.SetFocus(a.info)
@@ -172,9 +167,10 @@ func TestSearchSelectRejectsInvalidRows(t *testing.T) {
 	a.searchInput.SetText("alpha")
 	a.runSearch()
 
-	// Row 0 is the table header; row beyond the list is off the end.
+	// Negative rows and rows past the list are off the end.
 	before := appState.ViewKind
-	a.searchSelect(0)
+	a.searchSelect(-1)
+	a.searchSelect(len(a.searchGroupRows))
 	a.searchSelect(len(a.searchGroupRows) + 1)
 	if appState.ViewKind != before {
 		t.Fatalf("ViewKind changed on invalid row: %q", appState.ViewKind)
@@ -182,7 +178,7 @@ func TestSearchSelectRejectsInvalidRows(t *testing.T) {
 	a.closeSearch()
 }
 
-func TestSearchSelectHeaderWithMissingJumperIsNoop(t *testing.T) {
+func TestSearchSelectUnknownKindIsNoop(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
@@ -192,29 +188,18 @@ func TestSearchSelectHeaderWithMissingJumperIsNoop(t *testing.T) {
 	a.searchInput.SetText("alpha")
 	a.runSearch()
 
-	// Corrupt one hit row into a header with a kind that has no jumper and
+	// Corrupt one group row with a kind that has no view definition and
 	// confirm the select path still guards instead of panicking.
-	corrupted := -1
-	for i := range a.searchGroupRows {
-		if !a.searchGroupRows[i].header {
-			a.searchGroupRows[i].header = true
-			a.searchGroupRows[i].hit.kind = viewKind("no-such-kind")
-			corrupted = i
-			break
-		}
-	}
-	if corrupted < 0 {
-		t.Fatal("no hit row found to corrupt")
-	}
+	a.searchGroupRows[0].kind = viewKind("no-such-kind")
 	before := appState.ViewKind
-	a.searchSelect(corrupted + 1)
+	a.searchSelect(0)
 	if appState.ViewKind != before {
-		t.Fatalf("ViewKind changed on jumper-less header: %q", appState.ViewKind)
+		t.Fatalf("ViewKind changed on unknown kind: %q", appState.ViewKind)
 	}
 	a.closeSearch()
 }
 
-func TestSearchKindCountCountsShownSliceOnly(t *testing.T) {
+func TestSearchKindSummaryCountsShownSliceOnly(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
@@ -226,19 +211,28 @@ func TestSearchKindCountCountsShownSliceOnly(t *testing.T) {
 	a.searchInput.SetText("")
 	a.runSearch()
 
-	vms := searchKindCount(a.searchHits, viewVMsAll)
-	if vms != 2 {
-		t.Fatalf("searchKindCount(vms) = %d, want 2", vms)
+	count, projects := searchKindSummary(a.searchHits, viewVMsAll)
+	if count != 2 {
+		t.Fatalf("searchKindSummary(vms) count = %d, want 2", count)
+	}
+	if len(projects) != 2 || projects[0] != "p1" || projects[1] != "p2" {
+		t.Fatalf("searchKindSummary(vms) projects = %v, want [p1 p2]", projects)
 	}
 	// A truncated slice counts only what it still holds.
 	truncated := a.searchHits[:1]
-	if got := searchKindCount(truncated, viewVMsAll); got != 1 {
-		t.Fatalf("searchKindCount(truncated) = %d, want 1", got)
+	if got, _ := searchKindSummary(truncated, viewVMsAll); got != 1 {
+		t.Fatalf("searchKindSummary(truncated) count = %d, want 1", got)
+	}
+	if label := searchGroupProjectsLabel([]string{"p1", "p2"}); label != "[p1, p2]" {
+		t.Fatalf("searchGroupProjectsLabel = %q, want [p1, p2]", label)
+	}
+	if label := searchGroupProjectsLabel(nil); label != "" {
+		t.Fatalf("searchGroupProjectsLabel(nil) = %q, want empty", label)
 	}
 	a.closeSearch()
 }
 
-func TestSearchGroupHeaderCountMatchesShownRows(t *testing.T) {
+func TestSearchGroupRowLabelMatchesCountAndProjects(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
@@ -248,19 +242,20 @@ func TestSearchGroupHeaderCountMatchesShownRows(t *testing.T) {
 	a.searchInput.SetText("alpha")
 	a.runSearch()
 
-	// Every header cell must state the number of hit rows that follow it.
-	for row := 1; row <= len(a.searchGroupRows); row++ {
-		group := a.searchGroupRows[row-1]
-		if !group.header {
-			continue
-		}
+	// Every row label states the kind title, the shown-hit count and the
+	// distinct projects those hits span.
+	for row, group := range a.searchGroupRows {
 		cell := a.searchResults.GetCell(row, 0)
-		want := searchKindCount(a.searchHits, group.hit.kind)
-		if want == 0 {
-			t.Fatalf("header %q counts zero shown rows", cell.Text)
+		wantCount, wantProjects := searchKindSummary(a.searchHits, group.kind)
+		if wantCount == 0 || wantCount != group.count {
+			t.Fatalf("row %d label %q count = %d, want %d", row, cell.Text, group.count, wantCount)
 		}
-		if !strings.Contains(cell.Text, strings.TrimPrefix(cell.Text, "» ")) {
-			t.Fatalf("header cell lost its prefix: %q", cell.Text)
+		if label := searchGroupProjectsLabel(wantProjects); label != searchGroupProjectsLabel(group.projects) {
+			t.Fatalf("row %d label projects = %q, want %q", row, searchGroupProjectsLabel(group.projects), label)
+		}
+		want := tview.Escape(fmt.Sprintf("%s(%d): %s", views[group.kind].title, group.count, searchGroupProjectsLabel(group.projects)))
+		if cell.Text != want {
+			t.Fatalf("row %d label = %q, want %q", row, cell.Text, want)
 		}
 	}
 	a.closeSearch()
@@ -279,8 +274,8 @@ func TestSearchEmptyQueryShowsPlaceholderNotEverything(t *testing.T) {
 	if got := len(a.searchHits); got == 0 {
 		t.Fatal("empty query matched nothing, index should hold rows")
 	}
-	if got := a.searchResults.GetRowCount(); got != 1 {
-		t.Fatalf("table rows = %d, want 1 (headers only) on empty query", got)
+	if got := a.searchResults.GetRowCount(); got != 0 {
+		t.Fatalf("table rows = %d, want 0 on empty query", got)
 	}
 	title := a.searchResults.GetTitle()
 	if !strings.Contains(title, searchPlaceholder) {
@@ -289,7 +284,7 @@ func TestSearchEmptyQueryShowsPlaceholderNotEverything(t *testing.T) {
 
 	a.searchInput.SetText("alpha")
 	a.runSearch()
-	if got := a.searchResults.GetRowCount(); got <= 1 {
+	if got := a.searchResults.GetRowCount(); got == 0 {
 		t.Fatalf("table rows = %d after typing, want results", got)
 	}
 	if strings.Contains(a.searchResults.GetTitle(), searchPlaceholder) {
@@ -400,7 +395,7 @@ func TestApplyThemeToWidgetsStylesSearchPanel(t *testing.T) {
 	}
 }
 
-func TestSearchJumpWithoutProjectShowsStatus(t *testing.T) {
+func TestSearchSelectWithNoGroupsIsNoop(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
@@ -410,14 +405,12 @@ func TestSearchJumpWithoutProjectShowsStatus(t *testing.T) {
 	a.searchInput.SetText("alpha")
 	a.runSearch()
 
-	// Strip the project off the first hit: the jump must refuse instead of
-	// opening a view with an empty project context.
-	hit := a.searchGroupRows[0].hit
-	hit.project = ""
-	appState.ProjectID = "p1"
-	a.searchJump(&hit)
-	if appState.ProjectID == "" {
-		t.Fatal("jump with no project cleared the project")
+	// Selecting with an empty group list must not crash or change the view.
+	a.searchGroupRows = a.searchGroupRows[:0]
+	before := appState.ViewKind
+	a.searchSelect(0)
+	if appState.ViewKind != before {
+		t.Fatalf("ViewKind changed on empty groups: %q", appState.ViewKind)
 	}
 	a.closeSearch()
 }

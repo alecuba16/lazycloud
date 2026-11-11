@@ -331,7 +331,7 @@ func (a *app) buildSearchPanel() {
 
 	input.SetChangedFunc(func(text string) { a.runSearch() })
 	input.SetDoneFunc(func(key tcell.Key) {
-		if key == tcell.KeyEnter && results.GetRowCount() > 1 {
+		if key == tcell.KeyEnter && results.GetRowCount() > 0 {
 			a.tapp.SetFocus(results)
 		}
 	})
@@ -343,20 +343,21 @@ func (a *app) buildSearchPanel() {
 	a.searchPanel = panel
 }
 
-// buildMainLayout wires the shared widget tree run() mounts: the summary
-// row, command input, info table and status line stacked as the main view,
-// the search side panel next to it in a zero-width column, and both pages.
-// It exists apart from run() so tests can exercise the real wiring without
-// starting the terminal loop.
+// buildMainLayout wires the shared widget tree run() mounts: the header row
+// on top spanning the full width, below it the search side panel next to the
+// main view in a zero-width column, and both pages. It exists apart from
+// run() so tests can exercise the real wiring without starting the terminal
+// loop.
 func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 	a.buildSearchPanel()
 
+	// The header row spans the full width; the search panel splits only the
+	// area below it, so the project context stays visible while searching.
 	summary := tview.NewFlex().SetDirection(tview.FlexColumn).
 		AddItem(a.summary, 0, 1, false).
 		AddItem(a.shortcutsSummary, 0, 1, false)
 
 	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(summary, 4, 1, false).
 		AddItem(a.cmd, 0, 0, false).
 		AddItem(a.info, 0, 1, false).
 		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
@@ -370,7 +371,11 @@ func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
 		AddItem(mainView, 0, 1, false)
 	a.searchColumn = searchColumn
 
-	a.pages.AddPage("main", searchColumn, true, true)
+	root := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(summary, 4, 1, false).
+		AddItem(searchColumn, 0, 1, true)
+
+	a.pages.AddPage("main", root, true, true)
 	a.pages.AddPage("help", helpOverlay, true, false)
 }
 
@@ -470,106 +475,68 @@ func (a *app) runSearch() {
 	a.refreshSearchResults()
 }
 
-// searchGroupRow maps a grouped results row to the resource group it belongs
-// to. Header rows open the whole resource list. The entry is stored by value
-// so a later refresh reassigning the hits slice cannot leave a row pointing
-// at stale memory.
+// searchGroupRow is one results row: a resource kind, the query it matched,
+// how many of its rows matched, and the distinct projects the matches span.
+// The query rides along so a later refresh with new text cannot make an old
+// row preset a stale filter.
 type searchGroupRow struct {
-	header bool
-	hit    searchEntry
+	kind     viewKind
+	query    string
+	count    int
+	projects []string
 }
 
-// searchGroupJumpers maps each indexed kind to the same view-opening trigger
-// the numeric shortcuts use. Selecting a group header in the panel opens that
-// resource list in the main view without closing the panel.
-var searchGroupJumpers = map[viewKind]func(a *app){
-	viewVMsAll:               showVMs,
-	viewIPsAll:               (*app).showIPs,
-	viewNetworksAll:          (*app).showNetworks,
-	viewBucketsAll:           showBuckets,
-	viewLBsAll:               showLBs,
-	viewClustersAll:          showClusters,
-	viewInstanceGroupsAll:    showInstanceGroups,
-	viewInstanceTemplatesAll: showInstanceTemplates,
-	viewDisksAll:             showDisks,
-	viewSnapshotsAll:         showSnapshots,
-	viewImagesAll:            showImages,
-	viewRoutesAll:            showRoutes,
-	viewFirewallsAll:         showFirewalls,
-	viewPeeringsAll:          showPeerings,
-	viewAccountsAll:          showAccounts,
-	viewDNSZonesAll:          showDNSZones,
-	viewCloudRoutersAll:      showCloudRouters,
-	viewVPNsAll:              showVPNs,
-	viewPSCAll:               showPSC,
-	viewReservationsAll:      showReservations,
-	viewIAMAll:               showIAM,
-}
-
-// refreshSearchResults refills the results table with one section header per
-// resource type followed by its hits, so every group shows its own count and
-// the panel doubles as a per-type overview of the query. While the index is
-// still building, the title keeps a "searching" marker so partial results are
-// not mistaken for the final count.
+// refreshSearchResults refills the results table with one row per matching
+// resource kind, in the order the kinds are indexed: "vms(2): [p1, p2]".
+// While the index is still building, the title keeps a "searching" marker so
+// partial results are not mistaken for the final count.
 func (a *app) refreshSearchResults() {
 	table := a.searchResults
 	table.Clear()
 	a.searchGroupRows = a.searchGroupRows[:0]
-	headers := []string{"Name", "Project"}
-	for col, header := range headers {
-		table.SetCell(0, col, tview.NewTableCell(header).
-			SetTextColor(tview.Styles.SecondaryTextColor).
-			SetSelectable(false).
-			SetExpansion(1).
-			SetAttributes(tcell.AttrBold))
-	}
-
 	shown := a.searchHits
 	overflow := 0
 	if len(shown) > maxSearchHits {
 		shown = shown[:maxSearchHits]
 		overflow = len(a.searchHits) - maxSearchHits
 	}
-	if strings.TrimSpace(a.searchInput.GetText()) == "" {
+	query := strings.TrimSpace(a.searchInput.GetText())
+	if query == "" {
 		shown = nil
 		overflow = 0
 	}
-	row := 1
-	var currentKind viewKind
 	for i := range shown {
-		hit := &shown[i]
-		if hit.kind != currentKind {
-			currentKind = hit.kind
-			// The » prefix marks group headers: they open the whole resource
-			// list in the main view instead of jumping to one row.
-			table.SetCell(row, 0, tview.NewTableCell(fmt.Sprintf("» %s (%d)", views[hit.kind].title, searchKindCount(shown, hit.kind))).
-				SetTextColor(theme.titleColor()).
-				SetSelectable(true).
-				SetAttributes(tcell.AttrBold).
-				SetExpansion(1))
-			table.SetCell(row, 1, tview.NewTableCell("").SetSelectable(true))
-			a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{header: true, hit: *hit})
-			row++
+		kind := shown[i].kind
+		if len(a.searchGroupRows) > 0 && a.searchGroupRows[len(a.searchGroupRows)-1].kind == kind {
+			continue
 		}
-		name := ""
-		if len(hit.row) > 0 {
-			name = hit.row[0]
-		}
-		table.SetCell(row, 0, tview.NewTableCell(name).SetExpansion(1))
-		table.SetCell(row, 1, tview.NewTableCell(hit.project))
-		a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{hit: *hit})
-		row++
+		count, projects := searchKindSummary(shown, kind)
+		a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{
+			kind:     kind,
+			query:    query,
+			count:    count,
+			projects: projects,
+		})
+	}
+
+	for row, group := range a.searchGroupRows {
+		// tview parses bracket tags at draw time; a single-project label like
+		// [p1] would read as a color tag and vanish, so escape it.
+		table.SetCell(row, 0, tview.NewTableCell(tview.Escape(fmt.Sprintf("%s(%d): %s", views[group.kind].title, group.count, searchGroupProjectsLabel(group.projects)))).
+			SetTextColor(theme.titleColor()).
+			SetSelectable(true).
+			SetAttributes(tcell.AttrBold).
+			SetExpansion(1))
 	}
 	if len(a.searchGroupRows) > 0 {
-		table.Select(1, 0)
+		table.Select(0, 0)
 	}
-	table.SetFixed(1, 0)
 
 	title := fmt.Sprintf(" %d", len(a.searchHits))
 	if overflow > 0 {
 		title = fmt.Sprintf(" %d+", maxSearchHits)
 	}
-	if strings.TrimSpace(a.searchInput.GetText()) == "" {
+	if query == "" {
 		title = " " + searchPlaceholder + " "
 	} else if a.searchIndex.warmCount() < len(searchKinds) {
 		title += " matches | searching… "
@@ -579,74 +546,56 @@ func (a *app) refreshSearchResults() {
 	table.SetTitle(title)
 }
 
-// searchKindCount counts the hits of one resource type within the shown
-// slice, so a group header never claims more rows than the panel displays
-// when maxSearchHits truncation cuts a group short.
-func searchKindCount(shown []searchEntry, kind viewKind) int {
-	count := 0
+// searchKindSummary counts one kind's hits and lists its distinct projects in
+// first-seen order, from the shown slice only so a group never claims more
+// rows than the hit cap left visible.
+func searchKindSummary(shown []searchEntry, kind viewKind) (count int, projects []string) {
+	seen := map[string]bool{}
 	for i := range shown {
-		if shown[i].kind == kind {
-			count++
+		if shown[i].kind != kind {
+			continue
+		}
+		count++
+		if shown[i].project != "" && !seen[shown[i].project] {
+			seen[shown[i].project] = true
+			projects = append(projects, shown[i].project)
 		}
 	}
-	return count
+	return count, projects
 }
 
-// searchSelect acts on one row of the grouped results: a header row opens
-// the resource list view (the same trigger as its numeric shortcut), a hit
-// row jumps to that resource with the filter preset.
+// searchGroupProjectsLabel renders the project list like [p1, p2]; an empty
+// list stays empty instead of printing bare brackets.
+func searchGroupProjectsLabel(projects []string) string {
+	if len(projects) == 0 {
+		return ""
+	}
+	return "[" + strings.Join(projects, ", ") + "]"
+}
+
+// searchSelect acts on one row of the grouped results: it opens the group's
+// All view and presets the filter to the query, so the main view lands on
+// exactly the rows the group counted. The panel stays open as the sidebar:
+// S returns to it, Esc closes it.
 func (a *app) searchSelect(row int) {
-	if row <= 0 || row > len(a.searchGroupRows) {
+	if row < 0 || row >= len(a.searchGroupRows) {
 		return
 	}
-	group := a.searchGroupRows[row-1]
-	if group.header {
-		jump, ok := searchGroupJumpers[group.hit.kind]
-		if !ok {
-			return
-		}
-		jump(a)
-		a.tapp.SetFocus(a.info)
-		a.searchPanelFocus = false
-		a.updateSearchPanelStyle()
+	group := a.searchGroupRows[row]
+	if _, ok := views[group.kind]; !ok {
 		return
 	}
-	a.searchJump(&group.hit)
-}
-
-// searchJump opens the hit's resource in its per-project view, with the
-// filter preset to the hit's name, following the node pool VM handoff.
-func (a *app) searchJump(hit *searchEntry) {
-	a.closeSearch()
-	if hit.project == "" {
-		a.statusText("[red]Result has no project[-]")
-		return
-	}
-	appState.AllProjects = false
-	appState.ProjectID = hit.project
-	if p, err := a.cache.GetProject(hit.project); err == nil && p != nil {
-		appState.Name = p.Name
-		appState.ProjectNumber = p.ProjectNumber
-	}
+	appState.AllProjects = true
 	renderSummary(a.summary)
-	kind := viewKind(strings.TrimSuffix(string(hit.kind), "-all"))
-	a.setView(kind)
+	a.setView(group.kind)
 
-	name := ""
-	if len(hit.row) > 0 {
-		name = hit.row[0]
-	}
 	appState.CmdMode = modeFilter
 	a.cmd.SetBorder(true)
 	a.cmd.SetLabel(" / ")
-	a.cmd.SetText(name)
+	a.cmd.SetText(group.query)
 	a.applyFilter()
-	for i, r := range a.visibleRows {
-		if len(r) > 0 && r[0] == name {
-			a.info.Select(i+1, 0)
-			break
-		}
-	}
 	a.tapp.SetFocus(a.info)
-	a.statusInfo(fmt.Sprintf("%s: %s (Esc clears filter)", views[kind].title, name))
+	a.searchPanelFocus = false
+	a.updateSearchPanelStyle()
+	a.statusInfo(fmt.Sprintf("%s: %s (Esc closes panel or clears filter)", views[group.kind].title, group.query))
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -180,79 +181,133 @@ func TestSearchPanelGroupsResultsByKind(t *testing.T) {
 	if len(a.searchGroupRows) == 0 {
 		t.Fatal("no grouped rows after search")
 	}
-	var headers int
-	for _, g := range a.searchGroupRows {
-		if g.header {
-			headers++
-		}
+	// "alpha" hits one VM and one bucket across two kinds: the panel shows
+	// exactly one row per kind, no name rows in between.
+	if len(a.searchGroupRows) != 2 {
+		t.Fatalf("group rows = %d, want 2 (vms + buckets)", len(a.searchGroupRows))
 	}
-	if headers < 2 {
-		t.Fatalf("group headers = %d, want at least 2 (vms + buckets)", headers)
-	}
-	if got := a.searchResults.GetRowCount() - 1; got != len(a.searchGroupRows) {
+	if got := a.searchResults.GetRowCount(); got != len(a.searchGroupRows) {
 		t.Fatalf("table rows = %d, want %d", got, len(a.searchGroupRows))
 	}
-	cell := a.searchResults.GetCell(1, 0)
-	if !strings.Contains(cell.Text, "VMs (1)") {
-		t.Errorf("first group header = %q, want VMs count in title", cell.Text)
+	if a.searchGroupRows[0].kind != viewVMsAll || a.searchGroupRows[0].count != 1 {
+		t.Fatalf("first group = %+v, want vms(1)", a.searchGroupRows[0])
+	}
+	// The cell text is tag-escaped ([p1] would otherwise read as a color
+	// tag), so compare against the escaped label.
+	cell := a.searchResults.GetCell(0, 0)
+	want := tview.Escape(fmt.Sprintf("VMs(1): %s", searchGroupProjectsLabel([]string{"p1"})))
+	if cell.Text != want {
+		t.Errorf("first group row = %q, want %q", cell.Text, want)
+	}
+	if !strings.Contains(cell.Text, "VMs(1)") {
+		t.Errorf("first group row = %q, want VMs count in label", cell.Text)
 	}
 }
 
-func TestSearchGroupHeaderOpensView(t *testing.T) {
+func TestSearchGroupSelectOpensAllViewWithPresetFilter(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
+	resetAppState()
 
 	a.openSearch()
 	a.searchInput.SetText("alpha")
 	a.runSearch()
 
-	// The first group header is the VMs section.
-	appState.ProjectID = "p1"
-	a.searchSelect(1)
-	if appState.ViewKind != viewVMs {
-		t.Errorf("ViewKind = %q, want vms", appState.ViewKind)
+	// Selecting the VMs group opens the all-projects VM view with the query
+	// preset as the live filter.
+	a.searchSelect(0)
+	if appState.ViewKind != viewVMsAll {
+		t.Errorf("ViewKind = %q, want vms-all", appState.ViewKind)
 	}
 	if !a.searchOpen.Load() {
-		t.Error("panel closed by group header select, want it open")
+		t.Error("panel closed by group select, want it open as sidebar")
 	}
-	if a.searchPanelFocus {
-		t.Error("panel still focused after group header select, want main view")
+	if !appState.AllProjects {
+		t.Error("AllProjects not set by group select")
 	}
+	if a.cmd.GetText() != "alpha" {
+		t.Errorf("filter text = %q, want alpha", a.cmd.GetText())
+	}
+	if appState.CmdMode != modeFilter {
+		t.Errorf("CmdMode = %v, want filter", appState.CmdMode)
+	}
+	if len(a.visibleRows) != 1 {
+		t.Fatalf("visibleRows = %d, want 1 (alpha-web)", len(a.visibleRows))
+	}
+	a.closeSearch()
 }
 
-func TestSearchJumpPresetsFilterAndSelects(t *testing.T) {
+func TestSearchGroupSelectKeepsPanelFocusStateConsistent(t *testing.T) {
 	a := newSearchTestApp(t)
 	seedSearchRows(t, a)
 	buildSearchIndexSync(t, a)
+	resetAppState()
 
 	a.openSearch()
-	a.searchInput.SetText("beta-db")
+	a.searchInput.SetText("alpha")
+	a.runSearch()
+	a.searchSelect(0)
+	if a.searchPanelFocus {
+		t.Error("panel still focused after group select, want main view")
+	}
+	// S must bring the user back to the panel query input.
+	a.openSearch()
+	if got := a.tapp.GetFocus(); got != a.searchInput {
+		t.Fatalf("focus after reopen = %T, want search input", got)
+	}
+}
+
+func TestSearchGroupSelectBucketsOpensBucketsAll(t *testing.T) {
+	a := newSearchTestApp(t)
+	seedSearchRows(t, a)
+	buildSearchIndexSync(t, a)
+	resetAppState()
+
+	a.openSearch()
+	a.searchInput.SetText("alpha")
 	a.runSearch()
 
-	// Find the hit row (the row after the VMs group header).
 	if len(a.searchGroupRows) < 2 {
 		t.Fatalf("searchGroupRows = %d, want at least 2", len(a.searchGroupRows))
 	}
-	a.searchSelect(2)
-	if a.searchOpen.Load() {
-		t.Error("search still open after jump")
+	if a.searchGroupRows[1].kind != viewBucketsAll {
+		t.Fatalf("second group kind = %q, want buckets-all", a.searchGroupRows[1].kind)
 	}
-	if appState.ProjectID != "p2" {
-		t.Errorf("ProjectID = %q, want p2", appState.ProjectID)
-	}
-	if appState.ViewKind != viewVMs {
-		t.Errorf("ViewKind = %q, want vms", appState.ViewKind)
-	}
-	if a.cmd.GetText() != "beta-db" {
-		t.Errorf("filter text = %q, want beta-db", a.cmd.GetText())
+	a.searchSelect(1)
+	if appState.ViewKind != viewBucketsAll {
+		t.Errorf("ViewKind = %q, want buckets-all", appState.ViewKind)
 	}
 	if len(a.visibleRows) != 1 {
-		t.Errorf("visibleRows = %d, want 1", len(a.visibleRows))
+		t.Errorf("visibleRows = %d, want 1 (alpha-bucket)", len(a.visibleRows))
 	}
-	if row, _ := a.info.GetSelection(); row != 1 {
-		t.Errorf("selected row = %d, want 1", row)
+	a.closeSearch()
+}
+
+func TestSearchGroupQuerySurvivesRefresh(t *testing.T) {
+	a := newSearchTestApp(t)
+	seedSearchRows(t, a)
+	buildSearchIndexSync(t, a)
+	resetAppState()
+
+	a.openSearch()
+	a.searchInput.SetText("alpha")
+	a.runSearch()
+	row := a.searchGroupRows[0]
+
+	// Retyping a new query must not make the stale row preset an old filter.
+	a.searchInput.SetText("beta")
+	a.runSearch()
+	if len(a.searchGroupRows) == 0 {
+		t.Fatal("no groups for beta query")
 	}
+	if got := a.searchGroupRows[0]; got.query != "beta" || got.kind != viewVMsAll {
+		t.Fatalf("group after retype = %+v, want beta vms", got)
+	}
+	if row.query != "alpha" {
+		t.Fatalf("old group query mutated = %q, want alpha", row.query)
+	}
+	a.closeSearch()
 }
 
 func TestSearchTabTogglesFocus(t *testing.T) {

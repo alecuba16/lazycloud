@@ -158,17 +158,20 @@ func TestSearchEnterSelectsFirstResult(t *testing.T) {
 	a.openSearch()
 	a.searchInput.SetText("alpha")
 	a.runSearch()
-	if a.searchResults.GetRowCount() < 2 {
+	if a.searchResults.GetRowCount() < 1 {
 		t.Fatal("no results to select")
 	}
-	a.searchResults.Select(1, 0)
+	a.searchResults.Select(0, 0)
 	handler := a.searchResults.InputHandler()
 	if handler == nil {
 		t.Fatal("search results table has no input handler")
 	}
 	handler(tcell.NewEventKey(tcell.KeyEnter, 0, tcell.ModNone), nil)
-	if appState.ViewKind == viewProjects && a.info.GetTitle() == "" {
-		t.Fatal("Enter on a result did not jump")
+	if appState.ViewKind != viewVMsAll {
+		t.Fatalf("Enter on a group did not jump, ViewKind = %q", appState.ViewKind)
+	}
+	if a.cmd.GetText() != "alpha" {
+		t.Fatalf("filter after Enter = %q, want alpha", a.cmd.GetText())
 	}
 	a.closeSearch()
 }
