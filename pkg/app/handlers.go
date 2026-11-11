@@ -109,7 +109,7 @@ func init() {
 		{key: 'a', desc: "toggle all projects", run: (*app).toggleAllProjects},
 		{
 			key:  'S',
-			desc: "global search side panel",
+			desc: "search side panel (Tab toggle, Esc close)",
 			run:  (*app).openSearch,
 		},
 		{key: ' ', desc: "show projects", run: func(a *app) { a.setView(viewProjects) }},
@@ -403,11 +403,19 @@ func (a *app) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		return nil
 	case tcell.KeyTab, tcell.KeyBacktab:
 		// While the search panel is open, Tab moves focus between the panel
-		// and the main view; the panel stays open either way. The filter
-		// input keeps Tab for detail completion while typing.
-		if a.searchOpen.Load() && a.tapp.GetFocus() != a.cmd {
-			a.toggleSearchFocus()
-			return nil
+		// and the main view; the panel stays open either way. In filter mode
+		// Tab keeps its older job of cycling detail paths, since the filter
+		// input is where the user is typing.
+		if a.searchOpen.Load() {
+			focus := a.tapp.GetFocus()
+			if focus == a.searchInput || focus == a.searchResults {
+				a.toggleSearchFocus()
+				return nil
+			}
+			if appState.CmdMode != modeFilter {
+				a.toggleSearchFocus()
+				return nil
+			}
 		}
 		if appState.CmdMode == modeFilter && (a.tapp.GetFocus() == a.cmd || a.tapp.GetFocus() == a.info) {
 			a.completeFilterDetail(event.Key() == tcell.KeyTab)

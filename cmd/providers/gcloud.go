@@ -518,51 +518,57 @@ func ListProjectVMs(projectID string) ([]VM, error) {
 			if inst.GetZone() == "" {
 				continue
 			}
-			vm := VM{
-				ProjectID:   projectID,
-				Name:        inst.GetName(),
-				InstanceID:  strconv.FormatUint(inst.GetId(), 10),
-				Zone:        resourceShortName(inst.GetZone(), ""),
-				MachineType: resourceShortName(inst.GetMachineType(), ""),
-				Status:      inst.GetStatus(),
-				Labels:      inst.GetLabels(),
-				NetworkTags: inst.GetTags().GetItems(),
-			}
-			for _, sa := range inst.GetServiceAccounts() {
-				vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
-			}
-			for _, m := range inst.GetMetadata().GetItems() {
-				if m.GetKey() == "instance-template" {
-					vm.InstanceTemplate = resourceShortName(m.GetValue(), "")
-					break
-				}
-			}
-			for _, iface := range inst.GetNetworkInterfaces() {
-				vmi := VMInterface{
-					Network:    resourceShortName(iface.GetNetwork(), ""),
-					Subnetwork: resourceShortName(iface.GetSubnetwork(), ""),
-					InternalIP: iface.GetNetworkIP(),
-				}
-				for _, ac := range iface.GetAccessConfigs() {
-					if natIP := ac.GetNatIP(); natIP != "" {
-						vmi.ExternalIP = natIP
-						break
-					}
-				}
-				vm.Interfaces = append(vm.Interfaces, vmi)
-			}
-			for _, d := range inst.GetDisks() {
-				disk := vmDisk(d)
-				if d.GetBoot() {
-					vm.BootDisk = disk
-				} else {
-					vm.DataDisks = append(vm.DataDisks, *disk)
-				}
-			}
-			vms = append(vms, vm)
+			vms = append(vms, instanceToVM(projectID, inst))
 		}
 	}
 	return vms, nil
+}
+
+// instanceToVM maps one compute instance API object to the cache VM row.
+// Metadata carries the instance template name under a fixed key.
+func instanceToVM(projectID string, inst *computepb.Instance) VM {
+	vm := VM{
+		ProjectID:   projectID,
+		Name:        inst.GetName(),
+		InstanceID:  strconv.FormatUint(inst.GetId(), 10),
+		Zone:        resourceShortName(inst.GetZone(), ""),
+		MachineType: resourceShortName(inst.GetMachineType(), ""),
+		Status:      inst.GetStatus(),
+		Labels:      inst.GetLabels(),
+		NetworkTags: inst.GetTags().GetItems(),
+	}
+	for _, sa := range inst.GetServiceAccounts() {
+		vm.ServiceAccounts = append(vm.ServiceAccounts, VMServiceAccount{Email: sa.GetEmail(), Scopes: sa.GetScopes()})
+	}
+	for _, m := range inst.GetMetadata().GetItems() {
+		if m.GetKey() == "instance-template" {
+			vm.InstanceTemplate = resourceShortName(m.GetValue(), "")
+			break
+		}
+	}
+	for _, iface := range inst.GetNetworkInterfaces() {
+		vmi := VMInterface{
+			Network:    resourceShortName(iface.GetNetwork(), ""),
+			Subnetwork: resourceShortName(iface.GetSubnetwork(), ""),
+			InternalIP: iface.GetNetworkIP(),
+		}
+		for _, ac := range iface.GetAccessConfigs() {
+			if natIP := ac.GetNatIP(); natIP != "" {
+				vmi.ExternalIP = natIP
+				break
+			}
+		}
+		vm.Interfaces = append(vm.Interfaces, vmi)
+	}
+	for _, d := range inst.GetDisks() {
+		disk := vmDisk(d)
+		if d.GetBoot() {
+			vm.BootDisk = disk
+		} else {
+			vm.DataDisks = append(vm.DataDisks, *disk)
+		}
+	}
+	return vm
 }
 
 func ListProjectDisks(projectID string) ([]Disk, error) {

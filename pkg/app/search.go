@@ -344,6 +344,54 @@ func (a *app) buildSearchPanel() {
 	a.searchPanel = panel
 }
 
+// buildMainLayout wires the shared widget tree run() mounts: the summary
+// row, command input, info table and status line stacked as the main view,
+// the search side panel next to it in a zero-width column, and both pages.
+// It exists apart from run() so tests can exercise the real wiring without
+// starting the terminal loop.
+func (a *app) buildMainLayout(helpOverlay *tview.Flex) {
+	a.buildSearchPanel()
+
+	summary := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(a.summary, 0, 1, false).
+		AddItem(a.shortcutsSummary, 0, 1, false)
+
+	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(summary, 4, 1, false).
+		AddItem(a.cmd, 0, 0, false).
+		AddItem(a.info, 0, 1, false).
+		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
+		AddItem(a.status, 1, 1, false)
+	a.mainView = mainView
+
+	// The search column stays zero-width until search opens, then takes a
+	// fixed slice so the main view shrinks instead of being covered.
+	searchColumn := tview.NewFlex().SetDirection(tview.FlexColumn).
+		AddItem(a.searchPanel, 0, 0, false).
+		AddItem(mainView, 0, 1, false)
+	a.searchColumn = searchColumn
+
+	a.pages.AddPage("main", searchColumn, true, true)
+	a.pages.AddPage("help", helpOverlay, true, false)
+}
+
+// searchPlaceholder is shown instead of results while the query is empty, so
+// opening the panel does not read as "every resource matches nothing".
+const searchPlaceholder = "type to search"
+
+// searchPanelWidthFor scales the side panel to the terminal: the full 46
+// columns on wide terminals, a smaller share below 100 so the main view
+// keeps usable room.
+func searchPanelWidthFor(width int) int {
+	if width <= 0 {
+		return searchPanelWidth
+	}
+	if width < 100 {
+		return width * 2 / 5
+	}
+	return searchPanelWidth
+}
+
 func (a *app) openSearch() {
 	if a.searchIndex == nil {
 		a.searchIndex = newSearchIndex()
@@ -354,9 +402,14 @@ func (a *app) openSearch() {
 	a.searchInput.SetText(a.searchQuery)
 	a.searchPanelFocus = true
 	a.searchOpen.Store(true)
-	a.searchColumn.ResizeItem(a.searchPanel, searchPanelWidth, 1)
+	width := 0
+	if a.screen != nil {
+		width, _ = a.screen.Size()
+	}
+	a.searchColumn.ResizeItem(a.searchPanel, searchPanelWidthFor(width), 1)
 	a.tapp.SetFocus(a.searchInput)
 	a.runSearch()
+	a.updateSearchPanelStyle()
 	a.ensureSearchIndex(false)
 	a.ensureSearchProjects()
 }
@@ -371,6 +424,7 @@ func (a *app) closeSearch() {
 	if a.searchColumn != nil {
 		a.searchColumn.ResizeItem(a.searchPanel, 0, 0)
 	}
+	a.updateSearchPanelStyle()
 	a.tapp.SetFocus(a.info)
 }
 
@@ -386,6 +440,23 @@ func (a *app) toggleSearchFocus() {
 	} else {
 		a.tapp.SetFocus(a.info)
 	}
+	a.updateSearchPanelStyle()
+}
+
+// updateSearchPanelStyle colors the search panel border while the panel holds
+// focus and restores the theme border while focus sits on the main view, so
+// Tab's effect is visible before any typing.
+func (a *app) updateSearchPanelStyle() {
+	if a.searchInput == nil || a.searchResults == nil {
+		return
+	}
+	focused := a.searchOpen.Load() && a.searchPanelFocus
+	border := theme.borderColor()
+	if focused {
+		border = theme.searchFocusBorderColor()
+	}
+	a.searchInput.SetBorderColor(border)
+	a.searchResults.SetBorderColor(border)
 }
 
 // runSearch re-runs the query against the index and refreshes the results
@@ -401,11 +472,12 @@ func (a *app) runSearch() {
 }
 
 // searchGroupRow maps a grouped results row to the resource group it belongs
-// to. Header rows open the whole resource list; hit rows point at their entry
-// in searchHits.
+// to. Header rows open the whole resource list. The entry is stored by value
+// so a later refresh reassigning the hits slice cannot leave a row pointing
+// at stale memory.
 type searchGroupRow struct {
 	header bool
-	hit    *searchEntry
+	hit    searchEntry
 }
 
 // searchGroupJumpers maps each indexed kind to the same view-opening trigger
@@ -459,19 +531,25 @@ func (a *app) refreshSearchResults() {
 		shown = shown[:maxSearchHits]
 		overflow = len(a.searchHits) - maxSearchHits
 	}
+	if strings.TrimSpace(a.searchInput.GetText()) == "" {
+		shown = nil
+		overflow = 0
+	}
 	row := 1
 	var currentKind viewKind
 	for i := range shown {
 		hit := &shown[i]
 		if hit.kind != currentKind {
 			currentKind = hit.kind
-			table.SetCell(row, 0, tview.NewTableCell(fmt.Sprintf("%s (%d)", views[hit.kind].title, a.searchKindCount(hit.kind))).
+			// The » prefix marks group headers: they open the whole resource
+			// list in the main view instead of jumping to one row.
+			table.SetCell(row, 0, tview.NewTableCell(fmt.Sprintf("» %s (%d)", views[hit.kind].title, searchKindCount(shown, hit.kind))).
 				SetTextColor(theme.titleColor()).
 				SetSelectable(true).
 				SetAttributes(tcell.AttrBold).
 				SetExpansion(1))
 			table.SetCell(row, 1, tview.NewTableCell("").SetSelectable(true))
-			a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{header: true, hit: hit})
+			a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{header: true, hit: *hit})
 			row++
 		}
 		name := ""
@@ -480,7 +558,7 @@ func (a *app) refreshSearchResults() {
 		}
 		table.SetCell(row, 0, tview.NewTableCell(name).SetExpansion(1))
 		table.SetCell(row, 1, tview.NewTableCell(hit.project))
-		a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{hit: hit})
+		a.searchGroupRows = append(a.searchGroupRows, searchGroupRow{hit: *hit})
 		row++
 	}
 	if len(a.searchGroupRows) > 0 {
@@ -492,7 +570,9 @@ func (a *app) refreshSearchResults() {
 	if overflow > 0 {
 		title = fmt.Sprintf(" %d+", maxSearchHits)
 	}
-	if a.searchIndex.warmCount() < len(searchKinds) {
+	if strings.TrimSpace(a.searchInput.GetText()) == "" {
+		title = " " + searchPlaceholder + " "
+	} else if a.searchIndex.warmCount() < len(searchKinds) {
 		title += " matches | searching… "
 	} else {
 		title += " matches "
@@ -500,12 +580,13 @@ func (a *app) refreshSearchResults() {
 	table.SetTitle(title)
 }
 
-// searchKindCount counts the hits of one resource type so each group header
-// can show how many results that type holds.
-func (a *app) searchKindCount(kind viewKind) int {
+// searchKindCount counts the hits of one resource type within the shown
+// slice, so a group header never claims more rows than the panel displays
+// when maxSearchHits truncation cuts a group short.
+func searchKindCount(shown []searchEntry, kind viewKind) int {
 	count := 0
-	for i := range a.searchHits {
-		if a.searchHits[i].kind == kind {
+	for i := range shown {
+		if shown[i].kind == kind {
 			count++
 		}
 	}
@@ -528,9 +609,10 @@ func (a *app) searchSelect(row int) {
 		jump(a)
 		a.tapp.SetFocus(a.info)
 		a.searchPanelFocus = false
+		a.updateSearchPanelStyle()
 		return
 	}
-	a.searchJump(group.hit)
+	a.searchJump(&group.hit)
 }
 
 // searchJump opens the hit's resource in its per-project view, with the

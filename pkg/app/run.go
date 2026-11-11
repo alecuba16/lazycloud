@@ -85,47 +85,24 @@ func Run() error {
 
 	a.info.SetBorder(true)
 
-	a.buildSearchPanel()
-
 	shortcutsTable := newShortcutsPanel()
 	helpOverlay, helpRow := newHelpOverlay(shortcutsTable)
 	a.shortcuts = shortcutsTable
 	a.helpRow = helpRow
 	a.helpColumn = helpOverlay
 
-	shortcutsSummary := newShortcutsSummaryPanel()
-	a.shortcutsSummary = shortcutsSummary
-	summary := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(a.summary, 0, 1, false).
-		AddItem(shortcutsSummary, 0, 1, false)
+	a.shortcutsSummary = newShortcutsSummaryPanel()
 
-	mainView := tview.NewFlex().SetDirection(tview.FlexRow).
-		AddItem(summary, 4, 1, false).
-		AddItem(a.cmd, 0, 0, false).
-		AddItem(a.info, 0, 1, false).
-		AddItem(a.infobar, infobarHeight(infobarEnabled), infobarProportion(infobarEnabled), false).
-		AddItem(a.status, 1, 1, false)
-	a.mainView = mainView
-
-	// searchColumn hosts the global search side panel next to the main view;
-	// it stays zero-width until search opens, then takes a fixed slice so the
-	// main view shrinks instead of being covered.
-	searchColumn := tview.NewFlex().SetDirection(tview.FlexColumn).
-		AddItem(a.searchPanel, 0, 0, false).
-		AddItem(mainView, 0, 1, false)
-	a.searchColumn = searchColumn
-
-	a.pages.AddPage("main", searchColumn, true, true)
-	a.pages.AddPage("help", helpOverlay, true, false)
+	a.buildMainLayout(helpOverlay)
 
 	a.cmd.SetDoneFunc(a.done)
 	a.cmd.SetChangedFunc(a.changed)
 	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	a.cmd.SetFocusFunc(func() {
-		mainView.ResizeItem(a.cmd, 3, 1)
+		a.mainView.ResizeItem(a.cmd, 3, 1)
 	})
 	a.cmd.SetBlurFunc(func() {
-		mainView.ResizeItem(a.cmd, 0, 0)
+		a.mainView.ResizeItem(a.cmd, 0, 0)
 	})
 
 	a.info.SetSelectedFunc(a.selected)
