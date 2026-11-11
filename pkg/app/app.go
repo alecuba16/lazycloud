@@ -54,7 +54,6 @@ type app struct {
 	searchResults    *tview.Table
 	searchPanel      *tview.Flex
 	searchColumn     *tview.Flex
-	mainView         *tview.Flex
 	searchGroupRows  []searchGroupRow
 	searchPanelFocus bool
 	searchOpen       atomic.Bool
