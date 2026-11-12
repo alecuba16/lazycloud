@@ -1,0 +1,6 @@
+/lazycloud
+*.exe
+*.test
+*.out
+.env
+bin/
