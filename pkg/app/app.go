@@ -64,6 +64,7 @@ type app struct {
 	searchOpen        atomic.Bool
 	cmdFocused        bool
 	statusShowing     bool
+	loading           *panelLoading
 
 	settingsForm   *tview.Form
 	settingsRow    *tview.Flex
@@ -157,6 +158,9 @@ func populateInfoPanel(table *tview.Table, headers []string, rows [][]string) {
 }
 
 func (a *app) statusText(text string) {
+	// Any terminal status (error, success, or the empty reset) means the
+	// fetch it belonged to is over, so the panel's loading row stops too.
+	a.stopLoading()
 	a.status.SetText(text)
 	a.statusShowing = strings.HasPrefix(text, "[red]") || strings.HasPrefix(text, "[green]")
 	a.updateStatusHeight()
@@ -167,11 +171,13 @@ func (a *app) statusInfo(text string) {
 }
 
 // statusProgress reports an in-flight update (fetching, refreshing) so the
-// status row stays visible for its duration.
+// status row stays visible for its duration. The view panel mirrors it
+// with an animated loading row while the panel has no rows to show.
 func (a *app) statusProgress(text string) {
 	a.statusInfo(text)
 	a.statusShowing = true
 	a.updateStatusHeight()
+	a.startLoading(loadingMessage(text))
 }
 
 // updateStatusHeight keeps the status row collapsed except while the current
@@ -229,6 +235,11 @@ func (a *app) applyFilter() {
 	}
 	a.visibleRows = filtered
 	populateInfoPanel(a.info, a.viewHeaders, filtered)
+	// A repaint during a running fetch must keep the animated loading row
+	// alive: populateInfoPanel just cleared it with everything else.
+	if len(filtered) == 0 && a.loading != nil && a.loading.stop != nil {
+		a.paintLoadingRow()
+	}
 	a.updateInfoTitle()
 }
 
