@@ -4,13 +4,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/elferherrera/lazycloud/cmd/providers"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
-// newLoadingTestApp builds the minimal app the loading row needs: an info
-// panel wired through the real populateInfoPanel path.
+// newLoadingTestApp builds the minimal app the clock needs: an info
+// panel wired through the real populateInfoPanel path, with the clock
+// draw function installed the way run.go installs it.
 func newLoadingTestApp(t *testing.T) *app {
 	t.Helper()
 	cache, err := providers.NewCacheAt(t.TempDir() + "/cache.db")
@@ -27,143 +30,187 @@ func newLoadingTestApp(t *testing.T) *app {
 		cache:  cache,
 	}
 	a.info.SetBorder(true)
+	a.installLoadingDraw()
 	a.viewHeaders = []string{"Name", "Status"}
 	return a
 }
 
-// TestStatusProgressPaintsLoadingRow pins the on state: a fetch that
-// reports progress must paint the animated row under the headers while the
-// panel has no data rows.
-func TestStatusProgressPaintsLoadingRow(t *testing.T) {
+// drawLoading renders the clock through the panel's real draw function
+// and returns the painted rows as strings.
+func drawLoading(t *testing.T, a *app, width, height int) []string {
+	t.Helper()
+	return strings.Split(drawScreen(t, width, height, func(screen tcell.Screen) {
+		a.info.SetRect(0, 0, width, height)
+		a.info.Draw(screen)
+	}), "\n")
+}
+
+// TestClockPaintsWhileFetching pins the on state: a fetch that reports
+// progress must stamp the clock on the empty panel's center, with the
+// message and the elapsed time under it, and no data rows touched.
+func TestClockPaintsWhileFetching(t *testing.T) {
 	a := newLoadingTestApp(t)
 	a.applyFilter() // empty panel: headers only
 
 	a.statusProgress("Fetching VMs...")
+	a.loading.frame = 3 // pin a hand so the glyph is deterministic
 
-	cell := a.info.GetCell(1, 0)
-	if cell == nil {
-		t.Fatal("loading row not painted under the headers")
+	rows := drawLoading(t, a, 40, 12)
+	var painted []string
+	for _, r := range rows {
+		if strings.Contains(r, "🕓") || strings.Contains(r, "Fetching VMs") || strings.Contains(r, "elapsed") {
+			painted = append(painted, r)
+		}
 	}
-	if runes := []rune(cell.Text); !isSpinnerRune(runes[0]) {
-		t.Fatalf("loading row = %q, want a spinner frame first", cell.Text)
+	if len(painted) == 0 {
+		t.Fatalf("clock never painted: %q", rows)
 	}
-	if !strings.Contains(cell.Text, "Fetching VMs") {
-		t.Fatalf("loading row = %q, want the progress message in it", cell.Text)
+	clockRow, msgRow, elapsedRow := -1, -1, -1
+	for i, r := range rows {
+		if strings.Contains(r, "🕓") {
+			clockRow = i
+		}
+		if strings.Contains(r, "Fetching VMs") {
+			msgRow = i
+		}
+		if strings.Contains(r, "elapsed") {
+			elapsedRow = i
+		}
 	}
-	if !cell.NotSelectable {
-		t.Error("loading row must not be selectable, focus belongs to real rows")
+	if clockRow == -1 || msgRow == -1 || elapsedRow == -1 {
+		t.Fatalf("clock incomplete: clock=%d msg=%d elapsed=%d", clockRow, msgRow, elapsedRow)
+	}
+	if msgRow != clockRow+1 || elapsedRow != clockRow+2 {
+		t.Fatalf("clock lines stacked wrong: clock=%d msg=%d elapsed=%d", clockRow, msgRow, elapsedRow)
 	}
 }
 
-// TestLoadingRowKeepsHeaders pins that the headers row survives the
-// loading repaint: the animation is a body row, not a panel replacement.
-func TestLoadingRowKeepsHeaders(t *testing.T) {
+// TestClockCentersInPanel pins the geometry: the width-2 emoji glyph
+// sits with equal gaps to the left and right borders, the centered
+// position a rune count would miss by one.
+func TestClockCentersInPanel(t *testing.T) {
 	a := newLoadingTestApp(t)
 	a.applyFilter()
 
 	a.statusProgress("Fetching VMs...")
+	a.loading.frame = 0
 
-	header := a.info.GetCell(0, 0)
-	if header == nil || header.Text != "Name" {
-		t.Fatalf("headers row clobbered by the loading row: cell(0,0) = %+v", header)
+	const width = 42 // even inner width: a width-2 glyph can center exactly
+	rows := drawLoading(t, a, width, 12)
+	for i, r := range rows {
+		col := runeIndex(r, "🕐")
+		if col < 0 {
+			continue
+		}
+		// Glyph spans display cols col and col+1; the gaps to the borders
+		// (col 0 and width-1) must match for true centering.
+		leftGap := col - 1
+		rightGap := width - 1 - (col + 2)
+		if leftGap != rightGap {
+			t.Fatalf("clock off center at row %d: left gap %d, right gap %d", i, leftGap, rightGap)
+		}
+		return
 	}
+	t.Fatal("clock glyph never painted")
 }
 
-// TestStatusTextStopsLoading pins the off state: every terminal status
-// (error, success, or the plain reset) must remove the row and stop the
-// ticker, so a finished fetch leaves a clean panel.
-func TestStatusTextStopsLoading(t *testing.T) {
+// runeIndex returns the rune column where needle starts in s, or -1.
+func runeIndex(s, needle string) int {
+	col := 0
+	for i := 0; i < len(s); {
+		if strings.HasPrefix(s[i:], needle) {
+			return col
+		}
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+		col++
+	}
+	return -1
+}
+
+// TestClockStopsOnTerminalStatus pins the off state: every terminal
+// status (error, success, or the plain reset) must stop the ticker, and
+// the next paint shows a clean panel, no clock stamped on it.
+func TestClockStopsOnTerminalStatus(t *testing.T) {
 	a := newLoadingTestApp(t)
 	a.applyFilter()
 
 	a.statusProgress("Fetching VMs...")
 	if a.loading == nil || a.loading.stop == nil {
-		t.Fatal("loading state not running after statusProgress")
+		t.Fatal("clock not running after statusProgress")
 	}
-	frame := a.info.GetCell(1, 0).Text
 
 	a.statusText("[green]Fetched 12 VMs[-]")
 
 	if a.loading.stop != nil {
-		t.Error("loading ticker still running after a terminal status")
+		t.Error("clock ticker still running after a terminal status")
 	}
-	if a.info.GetRowCount() > 1 {
-		t.Fatalf("loading row survived the terminal status: %q", a.info.GetCell(1, 0).Text)
-	}
-	if frame == a.info.GetCell(1, 0).Text {
-		t.Error("row read after removal")
-	}
-}
-
-// TestLoadingRowVanishesWhenRowsArrive pins the repaint path: a populated
-// panel is worth more than the animation, so applyFilter with rows must
-// drop the loading row and paint the data.
-func TestLoadingRowVanishesWhenRowsArrive(t *testing.T) {
-	a := newLoadingTestApp(t)
-	a.applyFilter()
-
-	a.statusProgress("Fetching projects...")
-	a.setFilterBase([][]string{{"p1", "running"}})
-	a.applyFilter()
-
-	if a.info.GetRowCount() != 2 {
-		t.Fatalf("panel rows = %d, want headers + 1 data row", a.info.GetRowCount())
-	}
-	if got := a.info.GetCell(1, 0).Text; got != "p1" {
-		t.Fatalf("data row clobbered: cell(1,0) = %q, want p1", got)
+	rows := drawLoading(t, a, 40, 12)
+	for _, r := range rows {
+		for _, f := range clockFrames {
+			if strings.Contains(r, f) {
+				t.Fatalf("clock glyph survived the terminal status: %q", r)
+			}
+		}
+		if strings.Contains(r, "Fetching VMs") || strings.Contains(r, "elapsed") {
+			t.Fatalf("clock text survived the terminal status: %q", r)
+		}
 	}
 }
 
-// TestLoadingRowSurvivesEmptyRepaint pins the guard in populateInfoPanel:
-// filter edits repaint the panel constantly while a fetch runs, and an
-// empty rows slice must not erase the animated row.
-func TestLoadingRowSurvivesEmptyRepaint(t *testing.T) {
-	a := newLoadingTestApp(t)
-	a.applyFilter()
-
-	a.statusProgress("Fetching VMs...")
-	a.applyFilter() // the filter changed, panel still empty
-
-	if a.info.GetRowCount() < 2 {
-		t.Fatal("loading row erased by an empty repaint")
-	}
-	if cell := a.info.GetCell(1, 0); cell == nil || !isSpinnerRune([]rune(cell.Text)[0]) {
-		t.Fatalf("loading row damaged: %+v", cell)
-	}
-}
-
-// TestLoadingRowStaysOffPopulatedPanels pins the refresh case: when the
+// TestClockStaysOffPopulatedPanels pins the refresh case: when the
 // panel already shows rows, a background refresh keeps them on screen
-// instead of trading them for the animation.
-func TestLoadingRowStaysOffPopulatedPanels(t *testing.T) {
+// instead of trading them for the clock.
+func TestClockStaysOffPopulatedPanels(t *testing.T) {
 	a := newLoadingTestApp(t)
 	a.setFilterBase([][]string{{"vm-1", "running"}})
 	a.applyFilter()
 
 	a.statusProgress("Fetching VMs...")
 
-	if got := a.info.GetCell(1, 0).Text; got != "vm-1" {
-		t.Fatalf("data row replaced by the loading row: %q", got)
+	rows := drawLoading(t, a, 40, 12)
+	for _, r := range rows {
+		for _, f := range clockFrames {
+			if strings.Contains(r, f) {
+				t.Fatalf("clock painted over data rows: %q", r)
+			}
+		}
 	}
-	if a.info.GetRowCount() != 2 {
-		t.Fatalf("panel rows = %d, want headers + 1 data row", a.info.GetRowCount())
+	if !containsRow(rows, "vm-1") {
+		t.Fatalf("data row vanished under the clock: %q", rows)
 	}
 }
 
-// TestLoadingTickerAdvancesFrames pins the animation itself: with the
-// ticker running, the row's frame changes within a tick interval.
-func TestLoadingTickerAdvancesFrames(t *testing.T) {
+// TestClockSurvivesRepaints pins the draw-func placement: filter edits
+// repaint the panel constantly while a fetch runs, and the clock must
+// still paint after an empty populateInfoPanel.
+func TestClockSurvivesRepaints(t *testing.T) {
 	a := newLoadingTestApp(t)
 	a.applyFilter()
 
 	a.statusProgress("Fetching VMs...")
-	first := a.info.GetCell(1, 0).Text
+	a.applyFilter() // the filter changed, panel still empty
+
+	rows := drawLoading(t, a, 40, 12)
+	if !containsRow(rows, "Fetching VMs") {
+		t.Fatalf("clock erased by a repaint: %q", rows)
+	}
+}
+
+// TestClockTickerAdvancesFrames pins the animation itself: with the
+// ticker running, the frame counter moves within a tick interval.
+func TestClockTickerAdvancesFrames(t *testing.T) {
+	a := newLoadingTestApp(t)
+	a.applyFilter()
+
+	a.statusProgress("Fetching VMs...")
+	first := a.loading.frame
 
 	deadline := time.Now().Add(3 * time.Second)
 	moved := false
 	for time.Now().Before(deadline) {
 		a.uiMu.Lock()
-		cur := a.info.GetCell(1, 0).Text
+		cur := a.loading.frame
 		a.uiMu.Unlock()
 		if cur != first {
 			moved = true
@@ -173,12 +220,12 @@ func TestLoadingTickerAdvancesFrames(t *testing.T) {
 	}
 	a.statusText("")
 	if !moved {
-		t.Fatal("loading row frame never advanced")
+		t.Fatal("clock frame never advanced")
 	}
 }
 
 // TestLoadingMessageTrimsStatusDecorations pins the message adapter: the
-// panel row carries the message alone, without the status line's spinner
+// panel carries the message alone, without the status line's spinner
 // prefix or step counter.
 func TestLoadingMessageTrimsStatusDecorations(t *testing.T) {
 	cases := []struct {
@@ -197,8 +244,9 @@ func TestLoadingMessageTrimsStatusDecorations(t *testing.T) {
 	}
 }
 
-// TestStartLoadingWithoutPanelIsSafe pins the nil guard: an app whose info
-// panel never got built must not crash when a fetch reports progress.
+// TestStartLoadingWithoutPanelIsSafe pins the nil guard: an app whose
+// info panel never got built must not crash when a fetch reports
+// progress.
 func TestStartLoadingWithoutPanelIsSafe(t *testing.T) {
 	a := &app{status: tview.NewTextView().SetDynamicColors(true)}
 	a.statusProgress("Fetching VMs...")
@@ -206,4 +254,14 @@ func TestStartLoadingWithoutPanelIsSafe(t *testing.T) {
 	if a.loading != nil {
 		t.Error("loading state created without a panel to paint it on")
 	}
+}
+
+// containsRow reports whether any rendered row carries s.
+func containsRow(rows []string, s string) bool {
+	for _, r := range rows {
+		if strings.Contains(r, s) {
+			return true
+		}
+	}
+	return false
 }
