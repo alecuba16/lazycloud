@@ -44,8 +44,8 @@ func TestSettingsOverlayPaintsDropShadow(t *testing.T) {
 	a.settingsColumn.Draw(screen)
 	screen.Show()
 
-	// Panel rect: the row flex centers the shadow wrapper; read the
-	// wrapper's rect back through the app field.
+	// Panel rect: the row flex centers the dialog window; read the
+	// frame's rect back through the app field.
 	px, py, pw, ph := a.settingsPanel.GetRect()
 	if pw <= 0 || ph <= 0 {
 		t.Fatalf("settings panel rect = %d,%d %dx%d, want a laid-out panel", px, py, pw, ph)
@@ -57,20 +57,32 @@ func TestSettingsOverlayPaintsDropShadow(t *testing.T) {
 		t.Fatalf("panel bottom edge %d leaves no room for the shadow strip", py+ph)
 	}
 
-	// The strip below the panel and right of it is dim and darkened.
+	// The strip is the window rect shifted one cell down and right, the
+	// Turbo Vision shadow shape: the two cells diagonal to the corners
+	// stay lit, so the strip reads notched onto the window's own edges.
 	wantBg := shadowBackgroundColor(bgPaint)
 	if wantBg == bgPaint {
 		t.Fatalf("shadow background %v does not darken %v, test cannot pin the effect", wantBg, bgPaint)
 	}
-	if style, ok := cellStyle(screen, px, py+ph); !ok || !isDim(style) {
-		t.Errorf("cell below the panel left corner (%d,%d) is not dim", px, py+ph)
-	} else if _, bg, _ := style.Decompose(); bg != wantBg {
-		t.Errorf("cell below the panel left corner (%d,%d) keeps its background %v, want the darkened %v", px, py+ph, bg, wantBg)
+	checkStrip := func(x, y int, where string) {
+		t.Helper()
+		if style, ok := cellStyle(screen, x, y); !ok || !isDim(style) {
+			t.Errorf("strip cell %s (%d,%d) is not dim", where, x, y)
+		} else if _, bg, _ := style.Decompose(); bg != wantBg {
+			t.Errorf("strip cell %s (%d,%d) keeps its background %v, want the darkened %v", where, x, y, bg, wantBg)
+		}
 	}
-	if style, ok := cellStyle(screen, px+pw, py); !ok || !isDim(style) {
-		t.Errorf("cell right of the panel top (%d,%d) is not dim", px+pw, py)
-	} else if _, bg, _ := style.Decompose(); bg != wantBg {
-		t.Errorf("cell right of the panel top (%d,%d) keeps its background %v, want the darkened %v", px+pw, py, bg, wantBg)
+	checkStrip(px+1, py+ph, "below the panel, right of its left corner")
+	checkStrip(px+pw, py+1, "right of the panel, below its top corner")
+	checkStrip(px+pw, py+ph, "diagonal of the bottom-right corner")
+	// The cells diagonal to the top-right and bottom-left corners are
+	// the shape's notches: they sit outside the shifted rect, so they
+	// must keep the surface's own paint.
+	if style, ok := cellStyle(screen, px+pw, py); !ok || isDim(style) {
+		t.Errorf("cell right of the top corner (%d,%d) must not carry the shadow, the strip starts one row down", px+pw, py)
+	}
+	if style, ok := cellStyle(screen, px, py+ph); !ok || isDim(style) {
+		t.Errorf("cell below the left corner (%d,%d) must not carry the shadow, the strip starts one column right", px, py+ph)
 	}
 	// Inside the panel nothing is dim: the effect is only the depth
 	// strip, the rows keep their palette contrast.
@@ -119,12 +131,12 @@ func TestShadowBackgroundFloorCoversBlack(t *testing.T) {
 	}
 }
 
-// TestShadowedPrimitiveDelegatesFocus pins the wrapper's delegation: the
-// shadow is a paint pass, not a focus target, so focus, input and mouse
-// all belong to the wrapped panel.
-func TestShadowedPrimitiveDelegatesFocus(t *testing.T) {
+// TestFramedWindowDelegatesFocus pins the wrapper's delegation: the
+// frame and shadow are paint passes, not focus targets, so focus, input
+// and mouse all belong to the wrapped body.
+func TestFramedWindowDelegatesFocus(t *testing.T) {
 	inner := tview.NewForm()
-	wrapper := newShadowedOverlay(inner)
+	wrapper := newDialogWindow(" Test ", inner)
 	if wrapper.HasFocus() != inner.HasFocus() {
 		t.Fatal("wrapper HasFocus disagrees with the wrapped panel")
 	}

@@ -275,6 +275,10 @@ func TestCloseSettingsPersistsColorEdits(t *testing.T) {
 		configuredFollowTerminal = originalFollow
 	})
 	a := settingsTestApp(t)
+	// The name must be set explicitly: the panel saves under it, and a
+	// leftover from another test (or the zero value) would save the edit
+	// under a pack the fresh config file never selects.
+	configuredThemeName = "lazycloud_dark"
 	configuredTheme = providers.Theme{Background: "black"}
 	configuredFollowTerminal = false
 	configuredThemePacks = map[string]providers.Theme{

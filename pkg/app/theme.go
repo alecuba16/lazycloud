@@ -274,11 +274,13 @@ func (a *app) applyThemeChrome() {
 	if a.searchResults != nil {
 		a.searchResults.SetTitleColor(theme.titleColor())
 	}
-	if a.helpText != nil {
-		a.helpText.SetTitleColor(theme.titleColor())
+	a.restyleHelpWindow()
+	if a.settingsPanel != nil {
+		// The settings dialog is a framedWindow like the help dialog, so a
+		// live pack switch repaints its frame with the same call.
+		a.restyleSettingsWindow()
 	}
 	if a.settingsForm != nil {
-		a.settingsForm.SetTitleColor(theme.titleColor())
 		// Form.Draw restyles every item from these form-level colors on each
 		// draw, so the preview path must refresh them or the open panel keeps
 		// painting with the palette it was built with.

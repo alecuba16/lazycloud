@@ -135,25 +135,28 @@ func sortedCommands(commands []viewCommand) []viewCommand {
 	return sorted
 }
 
-// newHelpTextView builds the scrollable help body: a bordered TextView so
-// long lists scroll instead of clipping, and dynamic colors for the key
-// column. Screen-fitted sizing happens in resizeHelpOverlay on open.
+// newHelpTextView builds the scrollable help body: a borderless TextView
+// (the framed window draws the border and title) so long lists scroll
+// instead of clipping, and dynamic colors for the key column. Screen-fitted
+// sizing happens in resizeHelpOverlay on open.
 func newHelpTextView() *tview.TextView {
 	text := tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.shortcutTextColor())
-	text.SetBorder(true).SetTitle(" Help ")
-	text.SetTitleColor(theme.titleColor())
-	text.SetBorderColor(theme.borderColor())
 	return text
 }
 
 // newHelpOverlay returns a centered floating window around the help text,
-// stacked on top of the main view via Pages. The width starts at a
+// stacked on top of the main view via Pages: the framedWindow paints the
+// double-line dialog frame, the title in its top border and the drop
+// shadow, and the TextView body scrolls inside it. The width starts at a
 // comfortable default and is refit to the terminal on every open via
 // resizeHelpOverlay.
 func newHelpOverlay(text *tview.TextView) (overlay, row *tview.Flex) {
+	window := newDialogWindow(" Help ", text).
+		SetBorderColor(theme.borderColor()).
+		SetTitleColor(theme.titleColor())
 	row = tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
-		AddItem(text, overlayHeight(helpLineCount(), 0), 1, true).
+		AddItem(window, overlayHeight(helpLineCount()+2, 0), 1, true).
 		AddItem(nil, 0, 1, false)
 	overlay = tview.NewFlex().
 		AddItem(nil, 0, 1, false).
@@ -173,6 +176,8 @@ func (a *app) resizeHelpOverlay() {
 	if w <= 0 || h <= 0 {
 		return
 	}
-	a.helpRow.ResizeItem(a.helpText, overlayHeight(helpLineCount(), h), 1)
+	if window, ok := a.helpRow.GetItem(1).(*framedWindow); ok {
+		a.helpRow.ResizeItem(window, overlayHeight(helpLineCount()+2, h), 1)
+	}
 	a.helpColumn.ResizeItem(a.helpRow, overlayWidth(w), 1)
 }

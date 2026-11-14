@@ -277,6 +277,31 @@ func splitFilterQuery(query string) ([]string, []string) {
 
 func (a *app) refreshShortcuts() {
 	a.helpText.SetText(helpText())
+	a.restyleHelpWindow()
+}
+
+// restyleHelpWindow repaints the help dialog's frame with the live theme.
+// The window wrapper owns the border and title now, so the pack switch
+// must restyle the wrapper, not the TextView body.
+func (a *app) restyleHelpWindow() {
+	if a.helpRow == nil {
+		return
+	}
+	if window, ok := a.helpRow.GetItem(1).(*framedWindow); ok {
+		window.SetBorderColor(theme.borderColor()).SetTitleColor(theme.titleColor())
+	}
+}
+
+// restyleSettingsWindow repaints the settings dialog's frame with the live
+// theme, the same pass restyleHelpWindow gives the help dialog. The window
+// lives on the settings row like the help window lives on the help row.
+func (a *app) restyleSettingsWindow() {
+	if a.settingsRow == nil {
+		return
+	}
+	if window, ok := a.settingsRow.GetItem(1).(*framedWindow); ok {
+		window.SetBorderColor(theme.borderColor()).SetTitleColor(theme.titleColor())
+	}
 }
 
 func (a *app) applyThemeToWidgets() {
@@ -286,8 +311,8 @@ func (a *app) applyThemeToWidgets() {
 		return
 	}
 	if a.helpText != nil {
-		a.helpText.SetBorderColor(theme.borderColor())
-		a.helpText.SetTitleColor(theme.titleColor())
+		a.helpText.SetTextColor(theme.shortcutTextColor())
+		a.restyleHelpWindow()
 	}
 	a.cmd.SetFieldStyle(tcell.StyleDefault.Foreground(tview.Styles.PrimaryTextColor))
 	a.cmd.SetBorderColor(theme.borderColor())
@@ -515,42 +540,54 @@ func artOverlayWidth(content string, screenWidth int) int {
 	return width
 }
 
+// newOverlay builds a detail dialog: the framed window carries the border
+// and title, so the body TextView stays borderless and the flex layers only
+// center the window on the page. The window is sized to its content
+// (the frame ring is part of that size), the surrounding spacers center it.
 func (a *app) newOverlay(title, content string) (*tview.Flex, *tview.TextView) {
 	text := tview.NewTextView().SetDynamicColors(true).SetTextColor(theme.detailTextColor()).SetText(content)
-	text.SetBorder(true).SetTitle(title)
 	lines := strings.Count(text.GetText(true), "\n")
 	screenWidth, screenHeight := 0, 0
 	if a.screen != nil {
 		screenWidth, screenHeight = a.screen.Size()
 	}
-	height := overlayHeight(lines, screenHeight)
-	width := overlayWidth(screenWidth)
+	height := overlayHeight(lines+2, screenHeight)
+	width := overlayWidth(screenWidth) + 2
+	window := newDialogWindow(title, text).
+		SetBorderColor(theme.borderColor()).
+		SetTitleColor(theme.titleColor()).
+		SetBackgroundColor(tview.Styles.PrimitiveBackgroundColor)
+	row := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false).
+		AddItem(window, height, 1, true).
+		AddItem(nil, 0, 1, false)
 	overlay := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(text, height, 1, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+		AddItem(row, width, 1, true).
 		AddItem(nil, 0, 1, false)
 	return overlay, text
 }
 
 func (a *app) newArtOverlay(title, content string) (*tview.Flex, *tview.TextView) {
 	text := tview.NewTextView().SetWrap(false).SetText(content)
-	text.SetBorder(true).SetTitle(title)
 	lines := strings.Count(content, "\n")
 	screenWidth, screenHeight := 0, 0
 	if a.screen != nil {
 		screenWidth, screenHeight = a.screen.Size()
 	}
-	height := overlayHeight(lines, screenHeight)
-	width := artOverlayWidth(content, screenWidth)
+	height := overlayHeight(lines+2, screenHeight)
+	width := artOverlayWidth(content, screenWidth) + 2
+	window := newDialogWindow(title, text).
+		SetBorderColor(theme.borderColor()).
+		SetTitleColor(theme.titleColor()).
+		SetBackgroundColor(tview.Styles.PrimitiveBackgroundColor)
+	row := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false).
+		AddItem(window, height, 1, true).
+		AddItem(nil, 0, 1, false)
 	overlay := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
-		AddItem(tview.NewFlex().SetDirection(tview.FlexRow).
-			AddItem(nil, 0, 1, false).
-			AddItem(text, height, 1, true).
-			AddItem(nil, 0, 1, false), width, 1, true).
+		AddItem(row, width, 1, true).
 		AddItem(nil, 0, 1, false)
 	return overlay, text
 }

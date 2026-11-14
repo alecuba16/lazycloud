@@ -282,11 +282,12 @@ func (a *app) relabelThemeRow(seedName string) {
 // and rebuilt on every open.
 func (a *app) buildSettingsPage() {
 	form := tview.NewForm()
-	form.SetBorder(true).SetTitle(" Settings ")
 	// Single-spaced rows: with 16 color inputs the padded default (one
 	// blank line per item) would need ~47 rows and clip on a stock
 	// terminal, so the form stays one line per item like the rest of the
 	// overlays and still scrolls to the focused field on short screens.
+	// The frame (border, title, shadow) comes from the dialog window
+	// wrapper below, so the form itself stays borderless.
 	form.SetItemPadding(0)
 	a.settingsForm = form
 	a.rebuildSettingsForm()
@@ -299,21 +300,24 @@ func (a *app) buildSettingsPage() {
 	hint.SetTextColor(theme.settingsLabelColor())
 	a.settingsHint = hint
 
-	// The form and its hint line form the panel body; the shadow wrapper
-	// adds the one-cell depth strip around it, and the spacers center the
-	// whole thing on screen like a floating window.
+	// The form and its hint line form the panel body; the dialog window
+	// draws the double-line frame, the title in its top border and the
+	// one-cell drop shadow, and the spacers center the whole thing on
+	// screen like a floating window.
 	panel := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(form, settingsFormHeight(a), 1, true).
 		AddItem(hint, 2, 0, false)
-	shadow := newShadowedOverlay(panel)
-	a.settingsPanel = shadow
+	window := newDialogWindow(" Settings ", panel).
+		SetBorderColor(theme.borderColor()).
+		SetTitleColor(theme.titleColor())
+	a.settingsPanel = window
 	row := tview.NewFlex().SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
-		AddItem(shadow, settingsFormHeight(a)+2, 1, false).
+		AddItem(window, settingsFormHeight(a)+4, 1, false).
 		AddItem(nil, 0, 1, false)
 	column := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
-		AddItem(row, 56, 1, true).
+		AddItem(row, 58, 1, true).
 		AddItem(nil, 0, 1, false)
 	a.settingsRow = row
 	a.settingsColumn = column
@@ -326,13 +330,15 @@ func (a *app) buildSettingsPage() {
 // would leave the hint a third of the overlay width. Every key named here
 // is one the panel actually handles: tab moves between rows, space toggles
 // a checkbox (and on the Theme row cycles the pack), arrows cycle color
-// values, and closing (esc or the Close button) persists the edits.
-const settingsUsageHint = "tab moves · space toggles or cycles the theme\narrows cycle colors · esc saves and closes"
+// values, and closing (esc or the Close button) persists the edits. The
+// leading spaces line the hint up with the form rows, which sit one cell
+// in from the window frame's left border.
+const settingsUsageHint = " tab moves · space toggles or cycles the theme\n arrows cycle colors · esc saves and closes"
 
 // settingsUsageHintFollow is the follow-terminal variant: the theme and
 // color rows are hidden there, so the hint names only the keys that still
 // do something.
-const settingsUsageHintFollow = "tab moves · space toggles\nenter runs a button · esc saves and closes"
+const settingsUsageHintFollow = " tab moves · space toggles\n enter runs a button · esc saves and closes"
 
 // settingsFormHeight returns the flex height the form needs so tview draws
 // the buttons instead of clipping them: one line per form item (toggles,
@@ -374,7 +380,7 @@ func (a *app) resizeSettingsOverlay() {
 	if w <= 0 {
 		return
 	}
-	if width := overlayWidth(w); width > 56 {
+	if width := overlayWidth(w); width > 58 {
 		a.settingsColumn.ResizeItem(a.settingsRow, width, 1)
 	}
 	// The panel scrolls to the focused row when the flex gives it less
@@ -382,11 +388,15 @@ func (a *app) resizeSettingsOverlay() {
 	// screen: clamp the requested height so a small terminal still shows
 	// the panel top-aligned with every row reachable by focus, instead
 	// of the flex centering a 30-row form in 22 rows and clipping the
-	// Follow terminal and Theme rows off the top. The clamp tracks the
-	// terminal both ways: once a taller terminal can fit the form, the
-	// request goes back to its natural size so the panel floats centered
-	// and the shadow strip below it stays on screen.
-	height := settingsFormHeight(a) + 2
+	// Follow terminal and Theme rows off the top.
+	//
+	// The clamp tracks the terminal both ways: once a taller terminal can
+	// fit the form, the request goes back to its natural size so the panel
+	// floats centered and the shadow strip below it stays on screen. The
+	// +4 matches the row's window sizing: two rows of frame ring around
+	// the panel plus the shadow strip, so the flex never clips the
+	// window's bottom border.
+	height := settingsFormHeight(a) + 4
 	if height > h-2 {
 		height = h - 2
 	}
